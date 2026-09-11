@@ -26,7 +26,7 @@ Generated PCM is game data and must not be distributed. To prepare a local
 cache on the host:
 
 ```sh
-cargo run --release -p love-api --example prepare-audio -- \
+cargo run --release -p balatro-runtime -- --prepare-audio \
   /path/to/Balatro.exe artifacts/audio-cache
 ```
 

@@ -10,7 +10,7 @@ Balatro for Miyoo Mini
 
 The first launch prepares audio on the handheld. Leave at least 250 MB free
 after copying the game and let it finish. It only needs to do this once.
-If interrupted, launch again to resume. No computer-side patching is needed.
+If interrupted, launch again to resume.
 
 This is an early release; performance and compatibility still need work.
 The game is not included. Back up your saves before updating.

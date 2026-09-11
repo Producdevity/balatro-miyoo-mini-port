@@ -1,8 +1,7 @@
 # Development
 
-Host tests need Rust, Cargo and a C compiler. They run without Balatro or a
-handheld. Some regression tests read the original game code; these are ignored
-unless you supply your own game archive.
+Host tests need Rust, Cargo and a C compiler. Set `BALATRO_TEST_GAME` to include
+the regression tests that read the original game code.
 
 Rust is pinned in `rust-toolchain.toml`. Package builds use Zig 0.16.0 and
 cargo-zigbuild 0.23.4, matching CI and the included toolchain notices.
@@ -19,8 +18,8 @@ runs the checks on Linux and macOS, without game files or device access.
 ## ARM build
 
 The build currently uses Rust, Zig, cargo-zigbuild, Docker, curl, tar and make.
-Packaging also uses zip, unzip and a SHA-256 utility. Development has been done
-on macOS; Linux host tests run separately from physical handheld checks.
+Packaging also uses zip, unzip and a SHA-256 utility. CI builds the ARM package
+on Linux and runs host tests on Linux and macOS.
 
 ```sh
 rustup target add armv7-unknown-linux-musleabihf
@@ -30,9 +29,8 @@ scripts/package.sh /path/to/Balatro.exe
 ```
 
 Docker builds the static LuaJIT library using an ARMv7 musl toolchain. It needs
-to run `linux/arm/v7` containers, including on non-ARM hosts. The Debian image
-in `build-luajit.sh` runs only inside Docker. Zig builds the Rust runtime,
-NEON code and small Onion audio helper.
+to run `linux/arm/v7` containers, including on non-ARM hosts. Zig builds the Rust
+runtime, NEON code and small Onion audio helper.
 The runtime links statically; the audio helper uses Onion's glibc audio wrapper.
 
 Dependencies are locked by `Cargo.lock`; the SLEEF download is checksum-checked.
@@ -45,35 +43,28 @@ It refreshes the license texts included in binary packages from Cargo's locked
 ARM dependency graph. Keep upstream copyright notices when moving or editing
 derived code.
 
-## Layout
+## Packages
 
-- `crates/runtime`: launch, frame scheduling, device input and presentation.
-- `crates/love-api`: Lua bindings, resources, audio and load-time game patches.
-- `crates/renderer`: CPU rasterizer, pixel operations and ARM NEON kernels.
-- `native`: Onion audio helper and its test endpoint.
-- `port`: Onion launcher, shortcut and installation instructions.
-- `scripts`: build, package, deployment and test commands.
-- `docs`: architecture, layout, controls, audio and performance testing.
+`scripts/package.sh /path/to/Balatro.exe` builds a local package in
+`artifacts/balatro-miyoo`, including the game and prepared audio. You can also
+set `BALATRO_GAME` to supply the game path.
+
+`scripts/package-release.sh` creates `artifacts/release/balatro-miyoo-mini.zip`
+with the runtime, launcher and licenses only.
 
 Every PR and push to `master` runs the host checks and builds a game-free ARM
 package. Download `balatro-miyoo-mini` from the workflow's artifacts to test it.
-These builds do not run the game or establish hardware compatibility.
 
 `scripts/package-source.sh` archives the committed tree, locked Cargo sources
-and SLEEF for distribution beside the binary. It does not include local changes.
-The source archive builds with the same commands; Cargo reads its bundled
-`vendor` directory. Rust, Zig, Docker and system build tools are still required.
-
-Graphics bindings are grouped by resource type under `love-api/src/graphics`.
-`game_source.rs` reads the game archive; `miyoo/patches.rs` applies the port's
-changes in memory. Keep runtime state separate from game-specific patches.
-Terminal helpers, compatibility scripts, diagnostic scripts and automated
-replays have separate directories under `runtime/src`.
+and SLEEF for distribution beside the binary. Cargo reads the archive's bundled
+`vendor` directory; use the same build commands and toolchain.
 
 The shortcut ships as `Balatro.notfound`. Onion's Ports import replaces any
 old active shortcut and renames the new one to `.port`. It checks for
 `script.sh`; the runtime then finds and validates the user's game archive.
 If the game is missing, the launcher stays visible and shows where to copy it.
+
+See [architecture](docs/architecture.md) for the source layout and game integration.
 
 ## Device tests
 
@@ -82,6 +73,7 @@ hostname; it defaults to `muos-sp`. The runner temporarily takes ownership of
 the frontend, so do not run it while another game is active.
 
 ```sh
+export BALATRO_GAME=/path/to/Balatro.exe
 SP_HOST=muos-sp CONTROLS_TEST=1 AUDIO_CAPTURE=1 \
   AUTOPLAY_TEST_BLIND_CHIPS=300 AUTOPLAY_PAYOUT_JOKERS=2 \
   AUTOPLAY_STRESS_EFFECTS=1 TEST_FRAMES=2000 WAIT_SECONDS=180 \
@@ -113,7 +105,8 @@ ordinary performance tests. `cold` clears only that test cache.
 `INPUT_FIXTURE=rapid-input` feeds raw Miyoo button records through the Linux
 reader and checks their effects on navigation, held repeat and release.
 `CONTROLS_TEST=music-transitions` checks music restarts and slow-frame fades.
-See the audio and controls notes for the frame limits used by each replay.
+See [audio](docs/audio.md) and [controls](docs/architecture.md#regression-checks)
+for the frame limits used by each replay.
 
 An SP replay is not a Mini performance result. Changes to input, audio, display
 or timing also need a physical Mini test. Compare performance with the same

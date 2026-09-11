@@ -889,21 +889,6 @@ fn run_frame_loop<B: Backend>(
             t_crt_start.elapsed()
         };
 
-        // Save PPM snapshots at key frames (TUI_SNAPSHOT env var)
-        if std::env::var("TUI_SNAPSHOT").is_ok() {
-            let save = frame_count % 200 == 0 && frame_count >= 200 && frame_count <= 12000;
-            if save {
-                state.flush_render_jobs();
-                let pb = state.pixel_buffer.lock();
-                let path = format!("C:/tmp/balatro_snap_f{}.ppm", frame_count);
-                if let Err(e) = pb.save_ppm(&path) {
-                    eprintln!("[SNAP] error: {}", e);
-                } else {
-                    eprintln!("[SNAP] Saved {} ({}x{})", path, pb.width, pb.height);
-                }
-            }
-        }
-
         // Debounced resize detection for Sixel mode.
         // Detection: zero-lock GetClientRect every 15 frames (~4 Hz).
         // Application: only after size stable for 150ms (avoids lag during maximize animation).

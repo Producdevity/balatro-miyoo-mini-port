@@ -1,6 +1,7 @@
 use anyhow::Result;
 use sprite_to_text::pixel_buffer::PixelBuffer;
 
+#[cfg(any(target_os = "linux", test))]
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 struct BitField {
@@ -9,6 +10,7 @@ struct BitField {
     msb_right: u32,
 }
 
+#[cfg(any(target_os = "linux", test))]
 #[derive(Clone, Copy)]
 struct PixelFormat {
     red: BitField,
@@ -518,6 +520,7 @@ mod linux {
     }
 }
 
+#[cfg(any(target_os = "linux", test))]
 #[inline]
 fn channel(value: u8, field: BitField) -> u32 {
     if field.length == 0 {
@@ -531,6 +534,7 @@ fn channel(value: u8, field: BitField) -> u32 {
     ((value as u32 * max + 127) / 255) << field.offset
 }
 
+#[cfg(any(target_os = "linux", test))]
 #[inline]
 fn pack(r: u8, g: u8, b: u8, a: u8, format: PixelFormat) -> u32 {
     channel(r, format.red)
@@ -539,6 +543,7 @@ fn pack(r: u8, g: u8, b: u8, a: u8, format: PixelFormat) -> u32 {
         | channel(a, format.alpha)
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn byte_indices(format: PixelFormat) -> Option<[usize; 4]> {
     let fields = [format.red, format.green, format.blue, format.alpha];
     if fields
@@ -558,6 +563,7 @@ fn byte_indices(format: PixelFormat) -> Option<[usize; 4]> {
     Some(indices)
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn blit_2x(
     source: &[u8],
     source_width: usize,
@@ -585,6 +591,7 @@ fn blit_2x(
     }
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn blit_2x_rotated(
     source: &[u8],
     source_width: usize,
@@ -613,6 +620,7 @@ fn blit_2x_rotated(
     }
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn blit_2x_span(
     source: &[u8],
     destination: &mut [u8],
@@ -672,6 +680,7 @@ fn blit_2x_span(
     }
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn blit_2x_span_rotated(
     source: &[u8],
     destination: &mut [u8],
@@ -731,12 +740,14 @@ fn blit_2x_span_rotated(
     }
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn native_present_enabled() -> bool {
     static ENABLED: std::sync::LazyLock<bool> =
         std::sync::LazyLock::new(|| std::env::var("BALATRO_NATIVE_PRESENT").as_deref() != Ok("0"));
     *ENABLED
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn blit_native(
     source: &[u8],
     width: usize,
@@ -767,6 +778,7 @@ fn blit_native(
     }
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn copy_native_pixels<'a>(
     source: impl Iterator<Item = &'a [u8]>,
     destination: &mut [u8],
@@ -786,6 +798,7 @@ fn copy_native_pixels<'a>(
     }
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn blit_scaled(
     source: &[u8],
     source_width: usize,
@@ -907,6 +920,7 @@ fn blit_scaled(
     }
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn blit_changed_2x(
     current: &[u8],
     previous: &mut [u8],

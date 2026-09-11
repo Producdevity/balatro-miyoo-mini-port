@@ -2,8 +2,9 @@
 
 The runtime implements the LOVE API that Balatro uses. It runs the original Lua
 game code with in-memory changes for the Mini's screen, controls and game loop.
-The game archive stays unchanged. It does not run the desktop LOVE executable
-or use the Stardew renderer.
+The game archive stays unchanged. The LOVE bindings and scalar CPU renderer
+started as a fork of balatro-port-tui. The Mini backend adds framebuffer output,
+evdev input, audio, ARM kernels and a threaded render pipeline.
 
 ## Components
 
@@ -58,10 +59,55 @@ methods such as CardArea's alignment update. UI callbacks read the preceding
 controller pass's collision state before it resets. Changing that order breaks
 tooltip lifetime.
 
-Input comes from evdev. The adapter preserves press/release order and maps
-buttons to gamepad actions. Saves are written synchronously through temporary
-files in Onion's save directory. The launcher restores its clock changes on
-normal exit and handled signals; it does not configure swap or zram.
+Saves are written synchronously through temporary files in Onion's save
+directory. The launcher restores its clock changes on normal exit and handled
+signals. It leaves swap and zram configuration alone.
 
-See [controls](controls.md), [layout](layout.md), [audio](audio.md) and
-[performance testing](performance.md) for the corresponding code and checks.
+## Controls
+
+`runtime/src/platform/input.rs` reads evdev events. `miyoo_input.rs` and
+`miyoo_input.lua` map them to gamepad callbacks, preserving press/release order.
+Several D-pad taps received during one slow frame can move focus in that
+update. Other actions are limited to one press per update to preserve the
+order of selection, play, discard and menu changes.
+
+A held direction repeats after 0.3 seconds, then every 0.1 seconds. Separate
+taps act immediately. Releasing and pressing again resets the hold timer,
+including when both events arrive between updates.
+
+The adapter queues input through menu-opening locks for up to half a second.
+Slow rendering alone does not expire queued input. Gameplay locks still block
+actions during scoring. Controller taps bypass the option-arrow click debounce;
+mouse clicks and disabled-button checks retain the game's behaviour.
+
+## Layout
+
+`love-api/src/miyoo/small_screen.lua` places the HUD, hand and actions in one
+640x480 room. Played cards occupy a separate row. Text rescaling rebuilds
+glyph metrics while retaining width limits, including undiscovered-card titles.
+
+`popups.lua` fits tooltips above, below or beside the focused card.
+`deck_layout.lua` draws the held deck overview above Jokers and suppresses
+card tooltips until it closes. Paused-menu events use elapsed time; gameplay
+events keep their original clock and pause behaviour.
+
+## Regression checks
+
+Host tests cover event order, held repeats, layout calculations and menu clocks.
+Set `BALATRO_TEST_GAME` to include tests against the original game code.
+See [device setup](../CONTRIBUTING.md#device-tests) before running these replays:
+
+```sh
+CONTROLS_TEST=rapid-input scripts/test-sp.sh
+INPUT_FIXTURE=rapid-input TEST_FRAMES=900 WAIT_SECONDS=120 scripts/test-sp.sh
+CONTROLS_TEST=layout TEST_FRAMES=3000 WAIT_SECONDS=240 scripts/test-sp.sh
+CONTROLS_TEST=scoring AUTOPLAY_PAYOUT_JOKERS=2 \
+  AUTOPLAY_STRESS_EFFECTS=1 TEST_FRAMES=1800 scripts/test-sp.sh
+CONTROLS_TEST=blind TEST_FRAMES=1000 WAIT_SECONDS=120 scripts/test-sp.sh
+```
+
+The full controller replay in CONTRIBUTING.md also checks selection, play,
+discard, menus and deck tabs. Inspect its captures for overlaps and focus
+visibility. Physical button behaviour and latency need a Mini test.
+
+See [audio](audio.md) and [performance testing](performance.md) for those checks.

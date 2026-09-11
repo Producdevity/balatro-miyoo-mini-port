@@ -31,6 +31,17 @@ For a renderer change, repeat with `VERIFY_RASTER=1`. It compares optimized
 output with the reference paths, so its frame times are not performance results.
 Also run the controller replay and inspect captures for clipping and overlaps.
 
-The synthetic card benchmark is `crates/renderer/examples/card-effects.rs`.
-Use it to isolate raster work, then check the change in real gameplay.
+## Card-effects benchmark
+
+```sh
+cargo run --release -p sprite-to-text --bin bench-card-effects -- 120
+```
+
+This draws synthetic cards at 640x480 and reports time and a pixel checksum
+for each effect. It isolates raster work without loading Balatro. Use
+`CARD_LAYERS=2` for layered cards, `CARD_PREPARED=1` for prepared effects,
+or `CARD_SCALE=0.5` for the smaller 320x240 workload. An optional second
+argument supplies a 71x95 RGBA card image.
+
+Check improvements in real gameplay after running the benchmark.
 Local captures, game-derived inputs and experiment logs are excluded from Git.

@@ -3,6 +3,7 @@ use love_api::state::SharedState;
 
 // The Miyoo kernel exposes the legacy 32-bit evdev record layout. Rust's
 // arm-musl timeval uses 64-bit time fields, so libc::timeval is not ABI-safe here.
+#[cfg(any(target_os = "linux", test))]
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 struct InputEvent32 {
@@ -13,6 +14,7 @@ struct InputEvent32 {
     value: i32,
 }
 
+#[cfg(any(target_os = "linux", test))]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum HandheldButton {
     Up,
@@ -32,6 +34,7 @@ enum HandheldButton {
     Menu,
 }
 
+#[cfg(any(target_os = "linux", test))]
 impl HandheldButton {
     fn key(self) -> &'static str {
         match self {
@@ -54,6 +57,7 @@ impl HandheldButton {
     }
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn button_for_code(code: u16) -> Option<HandheldButton> {
     match code {
         103 | 0x220 => Some(HandheldButton::Up),

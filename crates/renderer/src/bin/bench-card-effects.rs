@@ -14,7 +14,7 @@ fn main() {
         .unwrap();
     assert!((1..=2).contains(&layers));
     let scale: f32 = std::env::var("CARD_SCALE")
-        .unwrap_or_else(|_| "0.5".into())
+        .unwrap_or_else(|_| "1.5".into())
         .parse()
         .expect("card scale must be a number");
     assert!(scale == 0.5 || scale == 1.5);

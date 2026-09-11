@@ -8,6 +8,19 @@ trap 'exit 143' TERM
 # shellcheck source=scripts/lib/package.sh
 . "$ROOT/scripts/lib/package.sh"
 
+if SKIP_BUILD=1 BALATRO_GAME='' BALATRO_RUNTIME="$WORK/missing-runtime" \
+    "$ROOT/scripts/package.sh" >"$WORK/missing-game.log" 2>&1; then
+    echo 'Expected a missing game argument to fail' >&2
+    exit 1
+fi
+grep -qx 'Usage: scripts/package.sh /path/to/Balatro.exe' "$WORK/missing-game.log"
+if SKIP_BUILD=1 BALATRO_RUNTIME="$WORK/missing-runtime" \
+    "$ROOT/scripts/package.sh" "$WORK/missing-game" >"$WORK/missing-game.log" 2>&1; then
+    echo 'Expected a missing game file to fail' >&2
+    exit 1
+fi
+grep -Fxq "Balatro game file not found: $WORK/missing-game" "$WORK/missing-game.log"
+
 OUT=$WORK/package
 mkdir -p "$OUT/Roms/PORTS/Games/Balatro"
 printf old >"$OUT/Roms/PORTS/Games/Balatro/balatro-runtime"

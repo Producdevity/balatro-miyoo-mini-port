@@ -16,5 +16,5 @@ export LUA_LIB="$LUA_ROOT"
 export LUA_LIB_NAME=luajit-5.1
 export LUA_LINK=static
 export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-C target-cpu=cortex-a7 -C target-feature=+neon,+vfp4 -L native=$LUA_ROOT -l static=gcc"
-cargo zigbuild --locked --release --workspace --target "$TARGET" --features arm-neon,flame-simd,layer-pairs "$@"
+cargo zigbuild --locked --release -p balatro-runtime --target "$TARGET" --features arm-neon,flame-simd,layer-pairs "$@"
 sh "$ROOT/scripts/build-audio.sh"
