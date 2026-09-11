@@ -8,6 +8,10 @@ This is still in development. Sustained 30 FPS and long-session stability have
 not been established on the Mini. Cards, text, controls and audio work, but
 there are remaining performance and compatibility issues.
 
+![Balatro gameplay](docs/images/gameplay.gif)
+
+Recorded on the RG35XX SP used for development, not a Miyoo Mini.
+
 ## Install
 
 Extract the release ZIP onto an OnionOS SD card. Copy your own `Balatro.exe`
