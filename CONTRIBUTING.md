@@ -55,7 +55,7 @@ derived code.
 - `scripts`: build, package, deployment and test commands.
 - `docs`: architecture, layout, controls, audio and performance testing.
 
-Every PR and push to `main` runs the host checks and builds a game-free ARM
+Every PR and push to `master` runs the host checks and builds a game-free ARM
 package. Download `balatro-miyoo-mini` from the workflow's artifacts to test it.
 These builds do not run the game or establish hardware compatibility.
 
