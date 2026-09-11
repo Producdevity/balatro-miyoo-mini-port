@@ -28,10 +28,10 @@ mod linux {
     use std::sync::{Arc, Condvar, LazyLock, Mutex};
     use std::time::Instant;
 
-    const FBIOGET_VSCREENINFO: libc::c_int = 0x4600;
-    const FBIOGET_FSCREENINFO: libc::c_int = 0x4602;
-    const FBIOPAN_DISPLAY: libc::c_int = 0x4606;
-    const FBIO_WAITFORVSYNC: libc::c_int = 0x4004_4620;
+    const FBIOGET_VSCREENINFO: u32 = 0x4600;
+    const FBIOGET_FSCREENINFO: u32 = 0x4602;
+    const FBIOPAN_DISPLAY: u32 = 0x4606;
+    const FBIO_WAITFORVSYNC: u32 = 0x4004_4620;
     const FB_ACTIVATE_NOW: u32 = 0;
 
     #[repr(C)]
@@ -140,8 +140,8 @@ mod linux {
             let fd = file.as_raw_fd();
             let mut var = VarInfo::default();
             let mut fix = FixInfo::default();
-            if unsafe { libc::ioctl(fd, FBIOGET_VSCREENINFO, &mut var) } != 0
-                || unsafe { libc::ioctl(fd, FBIOGET_FSCREENINFO, &mut fix) } != 0
+            if unsafe { libc::ioctl(fd, FBIOGET_VSCREENINFO as _, &mut var) } != 0
+                || unsafe { libc::ioctl(fd, FBIOGET_FSCREENINFO as _, &mut fix) } != 0
             {
                 return Err(std::io::Error::last_os_error()).context("query framebuffer");
             }
@@ -221,7 +221,7 @@ mod linux {
                 if unsafe {
                     libc::ioctl(
                         self.file.as_raw_fd(),
-                        FBIO_WAITFORVSYNC,
+                        FBIO_WAITFORVSYNC as _,
                         &argument as *const u32,
                     )
                 } != 0
@@ -242,8 +242,9 @@ mod linux {
                 let visible_page = self.front_page;
                 self.var.yoffset = target_page as u32 * self.var.yres;
                 self.var.activate = FB_ACTIVATE_NOW;
-                if unsafe { libc::ioctl(self.file.as_raw_fd(), FBIOPAN_DISPLAY, &mut self.var) }
-                    == 0
+                if unsafe {
+                    libc::ioctl(self.file.as_raw_fd(), FBIOPAN_DISPLAY as _, &mut self.var)
+                } == 0
                 {
                     self.front_page = target_page;
                 } else {
