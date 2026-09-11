@@ -24,7 +24,7 @@ on macOS; Linux host tests run separately from physical handheld checks.
 
 ```sh
 rustup target add armv7-unknown-linux-musleabihf
-cargo install --locked cargo-zigbuild
+cargo install --locked cargo-zigbuild --version 0.23.4
 scripts/build.sh
 scripts/package.sh /path/to/Balatro.exe
 ```

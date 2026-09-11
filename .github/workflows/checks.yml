@@ -38,9 +38,11 @@ jobs:
           persist-credentials: false
       - name: Set up Rust
         run: rustup target add armv7-unknown-linux-musleabihf
-      - uses: mlugg/setup-zig@v2.2.1
-        with:
-          version: 0.16.0
+      - name: Install Zig
+        run: |
+          python3 -m venv "$RUNNER_TEMP/zig"
+          "$RUNNER_TEMP/zig/bin/pip" install ziglang==0.16.0
+          "$RUNNER_TEMP/zig/bin/python" -c 'from pathlib import Path; import ziglang; print(Path(ziglang.__file__).parent)' >> "$GITHUB_PATH"
       - uses: docker/setup-qemu-action@v4.3.0
         with:
           platforms: arm
