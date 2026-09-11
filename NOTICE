@@ -1,0 +1,30 @@
+Balatro for Miyoo Mini
+Copyright 2026 Producdevity
+Distributed as a whole under the GNU General Public License, version 3 only.
+Upstream code and third-party components retain their original licenses.
+
+This project includes code derived from balatro-port-tui by 4RH1T3CT0R7:
+https://github.com/4RH1T3CT0R7/balatro-port-tui
+
+Upstream revision: be8930d3c9fd70ab210918218f7cbffd2df1a30a
+Copyright 2025 balatro-port-tui contributors
+Licensed under the Apache License, Version 2.0. See licenses/balatro-port-tui.txt.
+
+The runtime, LOVE bindings and software renderer have been modified and
+reorganized for the Miyoo Mini. The original project is not responsible for
+these changes.
+
+This project includes a modified Balatro small-screen layout from PortMaster:
+https://github.com/PortsMaster/PortMaster-New
+
+Copyright (c) 2021 christianhaitian
+Licensed under the MIT License. See licenses/PortMaster.txt.
+
+The optional vector flame renderer uses SLEEF 3.9.0:
+https://github.com/shibatch/sleef
+Copyright Naoki Shibata and contributors 2010 - 2025.
+Licensed under the Boost Software License, Version 1.0. See licenses/SLEEF.txt.
+
+The handheld font is Nunito Black:
+Copyright 2014 The Nunito Project Authors.
+Licensed under the SIL Open Font License, Version 1.1. See licenses/Nunito.txt.

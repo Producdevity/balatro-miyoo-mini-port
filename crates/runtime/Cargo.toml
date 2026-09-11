@@ -1,0 +1,32 @@
+[package]
+name = "balatro-runtime"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+publish = false
+
+[features]
+arm-neon = ["sprite-to-text/arm-neon"]
+flame-simd = ["sprite-to-text/flame-simd"]
+native-sampler = ["love-api/native-sampler"]
+copy-trace = []
+queue-profile = ["love-api/queue-profile"]
+layer-pairs = ["love-api/layer-pairs"]
+shader-cache-stats = ["sprite-to-text/shader-cache-stats"]
+
+[build-dependencies]
+cc = "1.2"
+
+[dependencies]
+love-api = { path = "../love-api" }
+sprite-to-text = { path = "../renderer" }
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+anyhow = { workspace = true }
+libc = { workspace = true }
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+mlua = { workspace = true, features = ["luajit"] }
+
+[target.'cfg(not(target_arch = "arm"))'.dependencies]
+mlua = { workspace = true, features = ["lua51", "vendored"] }

@@ -1,0 +1,10 @@
+* text=auto
+*.sh text eol=lf
+*.notfound text eol=lf
+*.lua text eol=lf
+*.rs text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+licenses/** linguist-vendored
+licenses/*.txt whitespace=-blank-at-eol
+licenses/Rust-standard-library.html whitespace=-blank-at-eol

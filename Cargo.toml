@@ -1,0 +1,25 @@
+[workspace]
+members = [
+    "crates/love-api",
+    "crates/renderer",
+    "crates/runtime",
+]
+resolver = "2"
+
+[workspace.dependencies]
+anyhow = "1.0"
+crossterm = "0.28"
+flate2 = "1.0"
+fontdue = "0.9"
+libc = "0.2"
+lewton = "0.10"
+mlua = { version = "0.10", features = ["send"] }
+parking_lot = "0.12"
+ratatui = "0.29"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "abort"
+strip = true

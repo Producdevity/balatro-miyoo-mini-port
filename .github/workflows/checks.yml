@@ -1,0 +1,66 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        run: rustup show
+      - name: Check
+        run: scripts/check.sh
+      - name: Dependency notices
+        run: python3 scripts/collect-licenses.py --check
+
+  package:
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up Rust
+        run: rustup target add armv7-unknown-linux-musleabihf
+      - uses: mlugg/setup-zig@v2.2.1
+        with:
+          version: 0.16.0
+      - uses: docker/setup-qemu-action@v4.3.0
+        with:
+          platforms: arm
+      - name: Install cross-build tools
+        run: cargo install --locked cargo-zigbuild --version 0.23.4
+      - name: Build package
+        run: scripts/package-release.sh
+      - name: Test SD updates
+        run: sh scripts/test-deploy.sh artifacts/release/balatro-miyoo-mini
+      - name: Package source
+        run: scripts/package-source.sh
+      - name: Checksums
+        working-directory: artifacts/release
+        run: sha256sum balatro-miyoo-mini.zip balatro-miyoo-mini-source.tar.gz > SHA256SUMS
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: balatro-miyoo-mini
+          path: |
+            artifacts/release/balatro-miyoo-mini.zip
+            artifacts/release/balatro-miyoo-mini-source.tar.gz
+            artifacts/release/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14

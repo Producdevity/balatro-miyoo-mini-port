@@ -1,0 +1,18 @@
+[package]
+name = "sprite-to-text"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+publish = false
+
+[features]
+arm-neon = []
+flame-simd = ["arm-neon"]
+shader-cache-stats = []
+layer-pairs = []
+
+[dependencies]
+ratatui = { workspace = true }
+
+[build-dependencies]
+cc = "1.2"

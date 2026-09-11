@@ -1,0 +1,31 @@
+[package]
+name = "love-api"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+publish = false
+
+[features]
+native-sampler = []
+queue-profile = []
+layer-pairs = ["sprite-to-text/layer-pairs"]
+
+[dependencies]
+anyhow = { workspace = true }
+zip = { workspace = true }
+parking_lot = { workspace = true }
+crossterm = { workspace = true }
+flate2 = { workspace = true }
+sprite-to-text = { path = "../renderer" }
+dirs = "5"
+image = { version = "0.25", default-features = false, features = ["png"] }
+fontdue = { workspace = true }
+lewton = { workspace = true }
+sha2 = "0.10"
+libc = { workspace = true }
+
+[target.'cfg(target_arch = "arm")'.dependencies]
+mlua = { workspace = true, features = ["luajit"] }
+
+[target.'cfg(not(target_arch = "arm"))'.dependencies]
+mlua = { workspace = true, features = ["lua51", "vendored"] }

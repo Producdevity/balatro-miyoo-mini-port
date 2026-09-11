@@ -1,0 +1,10 @@
+#!/bin/sh
+GameName="Balatro"
+GameDir="Balatro"
+GameExecutable="script.sh"
+# Let the runtime find and validate Balatro.exe, Balatro.love or Balatro.
+GameDataFile="script.sh"
+KillAudioserver=0
+PerformanceMode=1
+Arguments=""
+/mnt/SDCARD/Emu/PORTS/launch_standalone.sh "$GameName" "$GameDir" "$GameExecutable" "$Arguments" "$GameDataFile" "$KillAudioserver" "$PerformanceMode"
