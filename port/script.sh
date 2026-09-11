@@ -16,7 +16,7 @@ mkdir -p "$SAVE_DIR" || exit 1
 exec 2>"$SAVE_DIR/launcher.log"
 
 # Invoked by the trap below.
-# shellcheck disable=SC2329
+# shellcheck disable=SC2317,SC2329
 finish() {
     result=$?
     trap - EXIT INT TERM

@@ -159,10 +159,10 @@ esac
 case "$SHADER_WORKER_MIN_PIXELS" in
     ''|*[!0-9]*) echo 'SHADER_WORKER_MIN_PIXELS must be an integer' >&2; exit 1 ;;
 esac
-[ "$SHADER_WORKER_MIN_PIXELS" -ge 256 ] && [ "$SHADER_WORKER_MIN_PIXELS" -le 65536 ] || {
+if [ "$SHADER_WORKER_MIN_PIXELS" -lt 256 ] || [ "$SHADER_WORKER_MIN_PIXELS" -gt 65536 ]; then
     echo 'SHADER_WORKER_MIN_PIXELS must be between 256 and 65536' >&2
     exit 1
-}
+fi
 [ "$CORE_DUMP_KB" -le 131072 ] || { echo 'Core dumps are limited to 128 MiB' >&2; exit 1; }
 
 if [ "${SKIP_PACKAGE:-0}" != 1 ]; then
