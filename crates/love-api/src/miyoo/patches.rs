@@ -337,6 +337,14 @@ pub(crate) fn patch_miyoo_script(file_path: &str, data: &mut Vec<u8>) {
         ],
         "game.lua" => &[
             (
+                "if not v.attention_text and not v.parent",
+                "if not (v.attention_text or v.config.draw_after_cards) and not v.parent",
+            ),
+            (
+                "if v.attention_text and v ~= self.debug_tools",
+                "if (v.attention_text or v.config.draw_after_cards) and v ~= self.debug_tools",
+            ),
+            (
                 "config = {align='tm', offset = {x=0,y=-0.8},major = self.hand, bond = 'Weak'}",
                 "config = {instance_type='POPUP', align='tm', offset = {x=0,y=-0.8},major = self.hand, bond = 'Weak'}",
             ),

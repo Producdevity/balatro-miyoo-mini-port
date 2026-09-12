@@ -741,6 +741,7 @@ fn run_frame_loop<B: Backend>(
             Ok("scoring") => Some(include_str!("scoring_layout_test.lua")),
             Ok("collection" | "collection-slow") => Some(include_str!("collection_test.lua")),
             Ok("languages" | "languages-play") => Some(include_str!("replays/languages.lua")),
+            Ok("blind-ui") => Some(include_str!("replays/blind_ui.lua")),
             Ok("jokers") => Some(include_str!("replays/jokers.lua")),
             _ => None,
         };

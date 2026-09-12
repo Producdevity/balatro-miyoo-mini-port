@@ -111,6 +111,8 @@ picker and switches through every language. `CONTROLS_TEST=jokers TEST_FRAMES=14
 renders every joker collection page. Both use disposable saves and capture frames.
 Use `CONTROLS_TEST=languages-play TEST_FRAMES=6500 WAIT_SECONDS=300` to also
 play a round and open the shop in Chinese after switching languages.
+`CONTROLS_TEST=blind-ui TEST_FRAMES=1000 WAIT_SECONDS=120` checks blind-panel
+layering with four Jokers, the pause menu, and score contrast against The Flint.
 See [audio](docs/audio.md) and [controls](docs/architecture.md#regression-checks)
 for the frame limits used by each replay.
 

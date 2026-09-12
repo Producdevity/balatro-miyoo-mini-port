@@ -3,6 +3,39 @@ use mlua::Lua;
 use std::io::Read;
 
 #[test]
+fn blind_panel_position_uses_its_measured_height() {
+    let lua = Lua::new();
+    lua.load("Game = {update_blind_select=function() end}; G = {}")
+        .exec()
+        .unwrap();
+    let source = crate::state::MIYOO_SMALL_SCREEN_PATCH;
+    let section = &source[source.find("local original_update_blind_select =").unwrap()
+        ..source.find("local original_notify_alert =").unwrap()];
+    lua.load(format!(
+        "local ROOM_H, SAFE_MARGIN, RUN_OVERLAY_Y = 12.8, 0.2, 5.35\n\
+         local function pin_run_overlay(box,y) box.T.y=y end\n{section}"
+    ))
+    .exec()
+    .unwrap();
+    lua.load(
+        r#"
+        for _, height in ipairs({6, 7.25, 9.2}) do
+            G.blind_select = {T={h=height}, config={}}
+            Game:update_blind_select(0.016)
+            local box = G.blind_select
+            assert(box.T.y+box.T.h <= 12.6+0.00001, 'panel extends below the screen')
+            assert(box.T.y >= 2.3, 'panel covers the HUD')
+            assert(box.config.draw_after_cards, 'panel uses the background draw pass')
+        end
+        G.blind_select = nil
+        Game:update_blind_select(0.016)
+        "#,
+    )
+    .exec()
+    .unwrap();
+}
+
+#[test]
 fn compact_hand_applies_one_bottom_inset_and_keeps_the_scoring_slide() {
     let lua = Lua::new();
     lua.load(

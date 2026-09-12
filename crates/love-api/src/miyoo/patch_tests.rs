@@ -329,6 +329,47 @@ fn miyoo_removes_the_unused_final_shader_pass() {
 }
 
 #[test]
+#[ignore = "requires user-owned game archive in BALATRO_TEST_GAME"]
+fn real_game_draws_foreground_panels_after_cards() {
+    let path = std::env::var("BALATRO_TEST_GAME").expect("set BALATRO_TEST_GAME");
+    let source = crate::state::GameSource::from_path(std::path::Path::new(&path)).unwrap();
+    let mut script = source.read_file("game.lua").unwrap();
+    patch_miyoo_script("game.lua", &mut script);
+    let script = String::from_utf8(script).unwrap();
+    let start = script
+        .find("        timer_checkpoint('primatives', 'draw')")
+        .unwrap();
+    let end = start
+        + script[start..]
+            .find("        G.under_overlay = false")
+            .unwrap();
+    let lua = mlua::Lua::new();
+    lua.load(
+        r#"
+        order = {}
+        local function box(name, config)
+            return {config=config or {}, translate_container=function() end,
+                draw=function() order[#order+1] = name end}
+        end
+        local attention = box('attention')
+        attention.attention_text = true
+        self = {I={
+            UIBOX={box('background'), box('blind', {draw_after_cards=true}), attention},
+            CARDAREA={box('cards')}, CARD={box('loose card')}
+        }, CONTROLLER={dragging={}, focused={}}}
+        G = self
+        love = {graphics={push=function() end, pop=function() end}}
+        timer_checkpoint = function() end
+        "#,
+    )
+    .exec()
+    .unwrap();
+    lua.load(&script[start..end]).exec().unwrap();
+    let order: String = lua.load("return table.concat(order, ',')").eval().unwrap();
+    assert_eq!(order, "background,cards,loose card,blind,attention");
+}
+
+#[test]
 fn miyoo_moveables_skip_only_settled_movement() {
     let mut script = b"function test()\n    self.CALCING = nil\n    if self.role.role_type == 'Glued' then\n        return\n    elseif self.role.role_type == 'Minor' then\n        if false or\n            self.role.xy_bond == 'Weak' or \n            self.role.r_bond == 'Weak' then  \n            return\n        end\n    end\nend"
             .to_vec();

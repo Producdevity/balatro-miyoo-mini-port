@@ -26,7 +26,6 @@ local OWNED_CARDS_Y = 2.5
 local RUN_OVERLAY_Y = 5.35
 local OWNED_JOKER_SCALE = 0.95
 local HAND_W = 6.8*G.CARD_W
-local BLIND_SELECT_H = 7.7
 local LAYOUT_DIAGNOSTICS = os.getenv('BALATRO_LAYOUT_DIAGNOSTICS') == '1'
 
 local HUD_INNER_W = ROOM_W - SAFE_MARGIN*2 - 0.9
@@ -687,9 +686,15 @@ end
 local original_blind_select_uidef = create_UIBox_blind_select
 function create_UIBox_blind_select(...)
     local result = original_blind_select_uidef(...)
+    for _, option in pairs(G.blind_select_opts) do
+        -- The stock container extends its background below the visible content.
+        local background = option.UIRoot.children[1].children[1].children[1]
+        background.config.minh = 0
+        background.children[1].config.minh = 0
+        option:recalculate()
+    end
     result.config.minw = ROOM_W - SAFE_MARGIN*2
     result.config.maxw = ROOM_W - SAFE_MARGIN*2
-    result.config.maxh = ROOM_H - RUN_OVERLAY_Y - SAFE_MARGIN
     if result.nodes and result.nodes[1] and result.nodes[1].config then
         result.nodes[1].config.padding = 0.12
     end
@@ -744,7 +749,8 @@ function create_UIBox_HUD()
             {n=G.UIT.O, config={id='chip_UI_count', w=SCORE_TEXT_W,
                 h=score_text_h, object=score_text, func='chip_UI_set'}}
         }},
-        {n=G.UIT.R, config={align='cm', minh=target_row_h}, nodes={
+        {n=G.UIT.R, config={align='cm', minw=HUD_SCORE_W-0.12, minh=target_row_h,
+            r=0.08, colour=darken(G.C.BLACK, 0.4)}, nodes={
             {n=G.UIT.O, config={id='small_screen_blind_target', w=SCORE_TEXT_W,
                 h=target_text_h, object=target_text,
                 func='small_screen_blind_target'}}
@@ -1071,9 +1077,11 @@ local original_update_blind_select = Game.update_blind_select
 function Game:update_blind_select(dt)
     local result = original_update_blind_select(self, dt)
     if G.blind_select then
+        G.blind_select.config.draw_after_cards = true
         local band = ROOM_H - SAFE_MARGIN - RUN_OVERLAY_Y
-        pin_run_overlay(G.blind_select, RUN_OVERLAY_Y - 0.12 +
-            math.max(0, (band - BLIND_SELECT_H)/2))
+        local height = G.blind_select.T.h
+        local y = RUN_OVERLAY_Y + math.max(0, (band-height)/2)
+        pin_run_overlay(G.blind_select, math.min(y, ROOM_H-SAFE_MARGIN-height))
     end
     return result
 end
