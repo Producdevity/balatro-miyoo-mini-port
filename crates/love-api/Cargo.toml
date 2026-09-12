@@ -20,6 +20,7 @@ sprite-to-text = { path = "../renderer" }
 dirs = "5"
 image = { version = "0.25", default-features = false, features = ["png"] }
 fontdue = { workspace = true }
+ab_glyph = "0.2.32"
 lewton = { workspace = true }
 sha2 = "0.10"
 libc = { workspace = true }

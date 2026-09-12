@@ -91,6 +91,20 @@ glyph metrics while retaining width limits, including undiscovered-card titles.
 card tooltips until it closes. Paused-menu events use elapsed time; gameplay
 events keep their original clock and pause behaviour.
 
+## Fonts
+
+Small fonts use Fontdue's precomputed outlines. Fonts larger than 256 KiB use
+ab_glyph to read outlines on demand; eagerly expanding the game's Noto fonts
+exhausts the handheld's memory when opening the language picker.
+
+Only one large font file is retained at a time, and it is released after 250 ms
+without a glyph request. Measured advances and line metrics stay cached, and
+live text objects share rendered strings, so ordinary
+layout and redraws do not reload font files. Font sizes remain in pixels per em
+for both backends. The default Nunito font keeps its original rendering path.
+New text can require reloading an expired font from the game archive. This
+trades occasional text-loading pauses for lower resident memory.
+
 ## Regression checks
 
 Host tests cover event order, held repeats, layout calculations and menu clocks.

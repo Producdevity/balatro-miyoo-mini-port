@@ -1,5 +1,6 @@
 // Derived from balatro-port-tui (Apache-2.0). Modified by Producdevity; see NOTICE.
 
+pub use crate::font::{FontCache, FontData};
 pub use crate::game_source::GameSource;
 pub use crate::miyoo::patches::{MIYOO_PAYOUT_PATCH, MIYOO_SMALL_SCREEN_PATCH};
 use crate::render_queue::{RenderJob, RenderQueue};
@@ -7,7 +8,7 @@ use parking_lot::{Mutex, RwLock};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 use std::time::Instant;
 
 use sprite_to_text::pixel_buffer::{PixelBuffer, StencilCompare};
@@ -207,130 +208,6 @@ impl FpsCounter {
     }
 }
 
-/// A loaded TTF font for text rendering
-pub struct FontData {
-    source: Arc<Mutex<GameSource>>,
-    path: String,
-    font: OnceLock<Option<fontdue::Font>>,
-    pub size: f32,
-}
-
-impl FontData {
-    pub fn new(source: Arc<Mutex<GameSource>>, path: String, size: f32) -> Self {
-        Self {
-            source,
-            path,
-            font: OnceLock::new(),
-            size,
-        }
-    }
-
-    pub fn font(&self) -> Option<&fontdue::Font> {
-        self.font
-            .get_or_init(|| {
-                let data = self.source.lock().read_file(&self.path).ok()?;
-                fontdue::Font::from_bytes(data, fontdue::FontSettings::default()).ok()
-            })
-            .as_ref()
-    }
-
-    /// Measure the width of a text string at a given size in pixels
-    pub fn text_width_at(&self, text: &str, size: f32) -> f32 {
-        let Some(font) = self.font() else {
-            return text.chars().count() as f32 * (size * 0.6).ceil();
-        };
-        let mut width = 0.0f32;
-        for ch in text.chars() {
-            let metrics = if size > 0.0 {
-                font.metrics(ch, size)
-            } else {
-                fontdue::Metrics::default()
-            };
-            width += metrics.advance_width;
-        }
-        width
-    }
-
-    /// Get the line height at the stored size
-    pub fn line_height_at(&self, size: f32) -> f32 {
-        let Some(font) = self.font() else {
-            return size;
-        };
-        let metrics = font.horizontal_line_metrics(size);
-        match metrics {
-            Some(m) => m.ascent - m.descent + m.line_gap,
-            None => size,
-        }
-    }
-
-    /// Rasterize text into RGBA pixels (white on transparent) at a given size
-    /// Returns (width, height, pixels)
-    pub fn rasterize_text_at(&self, text: &str, size: f32) -> (u32, u32, Vec<u8>) {
-        if text.is_empty() {
-            return (0, 0, vec![]);
-        }
-        let Some(font) = self.font() else {
-            return (0, 0, vec![]);
-        };
-
-        let metrics = font.horizontal_line_metrics(size);
-        let (ascent, height) = match metrics {
-            Some(m) => (m.ascent.ceil() as i32, (m.ascent - m.descent).ceil() as u32),
-            None => (size as i32, size.ceil() as u32),
-        };
-
-        // First pass: measure total width
-        let mut total_width = 0.0f32;
-        for ch in text.chars() {
-            let m = if size > 0.0 {
-                font.metrics(ch, size)
-            } else {
-                fontdue::Metrics::default()
-            };
-            total_width += m.advance_width;
-        }
-
-        let width = total_width.ceil() as u32;
-        if width == 0 || height == 0 {
-            return (0, 0, vec![]);
-        }
-
-        let mut pixels = vec![0u8; (width * height * 4) as usize];
-
-        // Second pass: render glyphs
-        let mut cursor_x = 0.0f32;
-        for ch in text.chars() {
-            let (m, bitmap) = font.rasterize(ch, size);
-            let bw = m.width;
-            let bh = m.height;
-            let bmp = &bitmap;
-
-            let glyph_x = cursor_x as i32 + m.xmin;
-            let glyph_y = ascent - bh as i32 - m.ymin;
-
-            for gy in 0..bh {
-                for gx in 0..bw {
-                    let px = glyph_x + gx as i32;
-                    let py = glyph_y + gy as i32;
-                    if px >= 0 && (px as u32) < width && py >= 0 && (py as u32) < height {
-                        let alpha = bmp[gy * bw + gx];
-                        if alpha > 0 {
-                            let idx = ((py as u32 * width + px as u32) * 4) as usize;
-                            pixels[idx] = 255;
-                            pixels[idx + 1] = 255;
-                            pixels[idx + 2] = 255;
-                            pixels[idx + 3] = alpha;
-                        }
-                    }
-                }
-            }
-            cursor_x += m.advance_width;
-        }
-
-        (width, height, pixels)
-    }
-}
-
 /// A loaded image's RGBA pixel data
 pub struct ImageData {
     pub width: u32,
@@ -420,6 +297,7 @@ pub struct SharedState {
     // Font registry
     pub fonts: Mutex<HashMap<u64, Arc<FontData>>>,
     pub font_paths: Mutex<HashMap<String, u64>>,
+    pub font_cache: Arc<Mutex<FontCache>>,
     pub next_font_id: Mutex<u64>,
     pub active_font_id: Mutex<u64>,
 
@@ -599,6 +477,7 @@ impl SharedState {
             next_spritebatch_id: Mutex::new(1),
             fonts: Mutex::new(HashMap::new()),
             font_paths: Mutex::new(HashMap::new()),
+            font_cache: Arc::new(Mutex::new(FontCache::default())),
             next_font_id: Mutex::new(1),
             active_font_id: Mutex::new(0),
             scissor: Mutex::new(None),

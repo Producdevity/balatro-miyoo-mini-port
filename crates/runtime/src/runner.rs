@@ -740,6 +740,8 @@ fn run_frame_loop<B: Backend>(
             Ok("layout") => Some(include_str!("layout_test.lua")),
             Ok("scoring") => Some(include_str!("scoring_layout_test.lua")),
             Ok("collection" | "collection-slow") => Some(include_str!("collection_test.lua")),
+            Ok("languages" | "languages-play") => Some(include_str!("replays/languages.lua")),
+            Ok("jokers") => Some(include_str!("replays/jokers.lua")),
             _ => None,
         };
         script
@@ -815,12 +817,12 @@ fn run_frame_loop<B: Backend>(
             }
             Ok(_) => {}
             Err(e) => {
-                eprintln!("[ERROR] Frame error: {}", e);
-                break;
+                return Err(anyhow::anyhow!("frame error: {e}"));
             }
         }
 
         let t_lua = t_lua_start.elapsed();
+        state.font_cache.lock().release_idle();
         // Draw jobs own their pixel data. Collect Lua objects while the worker
         // finishes this frame, before waiting for its completed buffer.
         if gc_overlap {

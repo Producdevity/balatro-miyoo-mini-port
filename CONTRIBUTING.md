@@ -105,6 +105,12 @@ ordinary performance tests. `cold` clears only that test cache.
 `INPUT_FIXTURE=rapid-input` feeds raw Miyoo button records through the Linux
 reader and checks their effects on navigation, held repeat and release.
 `CONTROLS_TEST=music-transitions` checks music restarts and slow-frame fades.
+
+`CONTROLS_TEST=languages TEST_FRAMES=5000 WAIT_SECONDS=300` opens the language
+picker and switches through every language. `CONTROLS_TEST=jokers TEST_FRAMES=1400`
+renders every joker collection page. Both use disposable saves and capture frames.
+Use `CONTROLS_TEST=languages-play TEST_FRAMES=6500 WAIT_SECONDS=300` to also
+play a round and open the shop in Chinese after switching languages.
 See [audio](docs/audio.md) and [controls](docs/architecture.md#regression-checks)
 for the frame limits used by each replay.
 

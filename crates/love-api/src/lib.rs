@@ -6,6 +6,7 @@ mod card_cache;
 mod card_layers;
 pub mod event;
 pub mod filesystem;
+mod font;
 mod game_source;
 pub mod graphics;
 pub mod keyboard;

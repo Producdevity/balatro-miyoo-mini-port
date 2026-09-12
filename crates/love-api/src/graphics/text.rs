@@ -41,6 +41,7 @@ pub(super) fn load_font(state: &SharedState, path: Option<&str>, size: f32) -> u
                 std::sync::Arc::clone(&state.game_source),
                 font_path.to_owned(),
                 size,
+                Arc::clone(&state.font_cache),
             )),
         );
         state
@@ -327,14 +328,18 @@ pub(super) fn render_colored_text_to_image(
 
     let font_id = *state.active_font_id.lock();
     if let Some(fd) = get_font(state, font_id) {
-        let Some(font) = fd.font() else {
-            let full_text: String = segments.iter().map(|(_, t)| t.as_str()).collect();
-            return render_text_to_image(state, &full_text, font_size);
-        };
         let image = state
             .text_cache
             .lock()
             .rasterize_colored(font_id, font_size, segments, || {
+                let Some(font) = fd.font() else {
+                    return ImageData {
+                        width: 0,
+                        height: 0,
+                        pixels: Vec::new(),
+                        white_alpha_mask: false,
+                    };
+                };
                 // Measure total width
                 let mut total_width = 0.0f32;
                 for (_, text) in segments {

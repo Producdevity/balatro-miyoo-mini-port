@@ -126,7 +126,12 @@ mod tests {
         use parking_lot::Mutex;
         let path = std::env::var("BALATRO_TEST_GAME").expect("set BALATRO_TEST_GAME");
         let source = Arc::new(Mutex::new(GameSource::from_path(path.as_ref()).unwrap()));
-        let fd = FontData::new(source, "resources/fonts/m6x11plus.ttf".into(), 50.0);
+        let fd = FontData::new(
+            source,
+            "resources/fonts/m6x11plus.ttf".into(),
+            50.0,
+            Arc::new(Mutex::new(crate::state::FontCache::default())),
+        );
         let font = fd.font().expect("game font must load");
         for size in [-1.0, 0.0, 12.5, 50.0, 200.0] {
             for ch in ' '..='~' {

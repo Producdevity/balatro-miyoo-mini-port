@@ -637,6 +637,13 @@ if [ "$CONTROLS_TEST" != 0 ]; then
             exit 1
         fi
     fi
+    if [ "$CONTROLS_TEST" = languages-play ]; then
+        if ! grep -q 'PASS: all language menu transitions' "$RESULTS/runtime.log" ||
+           ! grep -q 'PASS: translated round and shop' "$RESULTS/runtime.log"; then
+            echo "Language and gameplay checks did not both finish: $RESULTS" >&2
+            exit 1
+        fi
+    fi
 fi
 scp -r "$SP_HOST:$REMOTE/save" "$RESULTS/save"
 
