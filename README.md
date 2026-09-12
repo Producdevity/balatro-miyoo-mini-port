@@ -25,6 +25,12 @@ updating.
 The launcher requests 1.5 GHz through Onion's clock helper and restores the
 previous clock on exit. Set `BALATRO_CPU_MHZ=off` to disable this.
 
+## Reporting problems
+
+Include your device model and OnionOS version when
+[opening an issue](https://github.com/Producdevity/balatro-miyoo-mini-port/issues).
+Attach `runtime.log` and `launcher.log` from `Saves/CurrentProfile/saves/Balatro/`.
+
 ## Development
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for building, testing and SD deployment.

@@ -182,6 +182,23 @@ mod linux {
                 alpha: var.transp,
             };
             let rotate_180 = std::env::var("BALATRO_ROTATE_180").as_deref() == Ok("1");
+            let id: Vec<u8> = fix
+                .id
+                .iter()
+                .map(|&byte| byte as u8)
+                .take_while(|&byte| byte != 0)
+                .collect();
+            eprintln!(
+                "[video] driver={} virtual={}x{} offset={},{} mapped={} pan_step={},{}",
+                String::from_utf8_lossy(&id),
+                var.xres_virtual,
+                var.yres_virtual,
+                var.xoffset,
+                var.yoffset,
+                mapping_len,
+                fix.xpanstep,
+                fix.ypanstep
+            );
             eprintln!(
                 "[video] {}x{} stride={} pages={} rotate180={} rgba={}/{},{}/{},{}/{},{}/{}",
                 var.xres,
