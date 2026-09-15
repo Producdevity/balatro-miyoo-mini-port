@@ -31,6 +31,20 @@ For a renderer change, repeat with `VERIFY_RASTER=1`. It compares optimized
 output with the reference paths, so its frame times are not performance results.
 Also run the controller replay and inspect captures for clipping and overlaps.
 
+## Long runs
+
+```sh
+CONTROLS_TEST=long-run AUTOPLAY_PAYOUT_JOKERS=5 AUDIO_CAPTURE=1 \
+  TEST_FRAMES=18000 WAIT_SECONDS=1200 scripts/test-sp.sh
+```
+
+This cycles through blinds, payouts and shops with a one-chip blind target.
+It checks for duplicate or removed objects in the update lists and Cash Out
+controls left behind after a payout. Each new hand logs the Lua heap size and
+live object counts. Compare later rounds after the first shop has loaded;
+memory should settle rather than grow with every round. This is a lifetime
+test, not an FPS benchmark or a substitute for a full run on the Mini.
+
 ## Card-effects benchmark
 
 ```sh

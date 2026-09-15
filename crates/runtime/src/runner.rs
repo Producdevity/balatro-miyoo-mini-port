@@ -743,6 +743,7 @@ fn run_frame_loop<B: Backend>(
             Ok("languages" | "languages-play") => Some(include_str!("replays/languages.lua")),
             Ok("blind-ui") => Some(include_str!("replays/blind_ui.lua")),
             Ok("jokers") => Some(include_str!("replays/jokers.lua")),
+            Ok("long-run") => Some(include_str!("replays/long_run.lua")),
             _ => None,
         };
         script
@@ -852,8 +853,10 @@ fn run_frame_loop<B: Backend>(
                 Ok(label) => label.as_deref(),
                 Err(_) => Some("failed"),
             };
-            if let Some(label) = label {
-                let directory = std::path::PathBuf::from(std::env::var("BALATRO_TEST_SNAPSHOT")?);
+            if let (Some(label), Some(directory)) =
+                (label, std::env::var_os("BALATRO_TEST_SNAPSHOT"))
+            {
+                let directory = std::path::PathBuf::from(directory);
                 let path = directory.with_file_name(format!("controls-{label}.ppm"));
                 state.flush_render_jobs();
                 state
@@ -938,11 +941,12 @@ fn run_frame_loop<B: Backend>(
                 fps
             );
             eprintln!(
-                "[gc] steps={} cycles={} avg={:.3}ms max={:.3}ms",
+                "[gc] steps={} cycles={} avg={:.3}ms max={:.3}ms lua_kib={}",
                 gc_stats.steps,
                 gc_stats.cycles,
                 gc_stats.total.as_secs_f64() * 1000.0 / gc_stats.steps.max(1) as f64,
-                gc_stats.longest.as_secs_f64() * 1000.0
+                gc_stats.longest.as_secs_f64() * 1000.0,
+                lua.used_memory() / 1024
             );
             if let Some(sampler) = &lua_sampler {
                 eprintln!("[lua-samples] {}", sampler.take_report(lua));
