@@ -3,6 +3,69 @@ use mlua::Lua;
 use std::io::Read;
 
 #[test]
+#[ignore = "requires user-owned game archive in BALATRO_TEST_GAME"]
+fn constrained_ui_layout_registers_each_element_once() {
+    let path = std::env::var("BALATRO_TEST_GAME").expect("set BALATRO_TEST_GAME");
+    let mut archive = zip::ZipArchive::new(std::fs::File::open(path).unwrap()).unwrap();
+    let mut source = Vec::new();
+    archive
+        .by_name("engine/ui.lua")
+        .unwrap()
+        .read_to_end(&mut source)
+        .unwrap();
+    super::patches::patch_miyoo_script("engine/ui.lua", &mut source);
+    let lua = Lua::new();
+    lua.load(
+        r#"
+        Moveable = {extend=function() return {} end, init=function(self,args)
+            table.insert(G.MOVEABLES,self)
+            self.T = {x=args.T.x,y=args.T.y,w=args.T.w,h=args.T.h}
+            self.states = {click={},drag={},collide={},hover={}}
+        end}
+        G = {MOVEABLES={},UIT={T=1,B=2,O=3,R=4,C=5,ROOT=6,padding=0},
+            TILESIZE=1,TILESCALE=1,C={UI={},CLEAR={}},FUNCS={}}
+        G.LANG = {font={squish=1,FONTSCALE=1,TEXT_HEIGHT_SCALE=1,
+            FONT={getWidth=function(_,text) return #text end,getHeight=function() return 1 end}}}
+    "#,
+    )
+    .exec()
+    .unwrap();
+    lua.load(&source).exec().unwrap();
+    lua.load(
+        r#"
+        UIElement.__index = UIElement
+        function UIElement:set_role(role) self.role=role end
+        local box = setmetatable({draw_layers={}},{__index=UIBox})
+        local function element(kind,config,children)
+            return setmetatable({UIT=kind,config=config,children=children or {},
+                ARGS={},UIBox=box},UIElement)
+        end
+        for iteration=1,100 do
+            G.MOVEABLES = {}
+            local text = element(G.UIT.T,{text='Cash Out',scale=1})
+            local row = element(G.UIT.R,{maxw=4},{text})
+            local root = element(G.UIT.ROOT,{maxw=2},{row})
+            local bounds = {x=0,y=0,w=0,h=0}
+            UIBox.calculate_xywh(box,root,bounds)
+            assert(#G.MOVEABLES==3,'layout registered an element more than once')
+            assert(math.abs(root.T.w-2)<0.00001,'constrained width changed')
+            local states = text.states
+            for pass=1,3 do UIBox.calculate_xywh(box,root,bounds,true) end
+            assert(#G.MOVEABLES==3,'recalculation registered another element')
+            assert(text.states==states,'recalculation reset interaction state')
+            local added = element(G.UIT.T,{text='New',scale=0.25})
+            row.children[2]=added
+            UIBox.calculate_xywh(box,root,bounds,true)
+            assert(#G.MOVEABLES==4,'new element was not initialized during recalculation')
+            assert(added.T and added.states,'new element is missing its movement state')
+        end
+    "#,
+    )
+    .exec()
+    .unwrap();
+}
+
+#[test]
 fn blind_panel_position_uses_its_measured_height() {
     let lua = Lua::new();
     lua.load("Game = {update_blind_select=function() end}; G = {}")
@@ -359,6 +422,54 @@ fn payout_labels_resize_only_inside_the_summary() {
         assert(not other.attention_text)
         other:init({config={major=G.round_eval}})
         assert(other.attention_text)
+    "#,
+    )
+    .exec()
+    .unwrap();
+}
+
+#[test]
+fn payout_removal_releases_its_detached_controls() {
+    let lua = Lua::new();
+    lua.load(
+        r#"
+        UIBox = {
+            init = function(self, args) self.config = args.config end,
+            add_child = function() end,
+            remove = function(self)
+                assert(not self.REMOVED, 'box removed twice')
+                self.REMOVED = true
+            end
+        }
+        Game = {update_round_eval = function() end}
+        G = {}
+        create_UIBox_round_evaluation = function() end
+    "#,
+    )
+    .exec()
+    .unwrap();
+    lua.load(crate::state::MIYOO_PAYOUT_PATCH).exec().unwrap();
+    lua.load(
+        r#"
+        local function box(major)
+            local value = setmetatable({}, {__index=UIBox})
+            value:init({config={major=major}})
+            return value
+        end
+        local unrelated = box({})
+        for i = 1, 100 do
+            G.round_eval = box({})
+            local payout = G.round_eval
+            local cash_out, extra = box(payout), box(payout)
+            assert(cash_out.attention_text and extra.attention_text)
+            assert(not cash_out.parent, 'payout draw order changed')
+            extra:remove()
+            G.round_eval = nil
+            payout:remove()
+            assert(cash_out.REMOVED, 'Cash Out box survived its payout screen')
+            assert(not unrelated.REMOVED, 'unrelated UI box was removed')
+            assert(payout._svmm_payout_boxes == nil, 'payout retained its controls')
+        end
     "#,
     )
     .exec()

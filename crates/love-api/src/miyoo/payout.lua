@@ -50,7 +50,24 @@ function UIBox:init(args, ...)
     original_init(self, args, ...)
     if G.round_eval and args.config and args.config.major == G.round_eval then
         self.attention_text = true
+        local owner = G.round_eval
+        owner._svmm_payout_boxes = owner._svmm_payout_boxes or {}
+        table.insert(owner._svmm_payout_boxes, self)
     end
+end
+
+-- Cash Out is aligned to the payout screen but is not one of its children.
+-- Keep its separate draw pass, while giving it the same lifetime as the screen.
+local original_remove = UIBox.remove
+function UIBox:remove(...)
+    local boxes = self._svmm_payout_boxes
+    self._svmm_payout_boxes = nil
+    if boxes then
+        for i = #boxes, 1, -1 do
+            if not boxes[i].REMOVED then boxes[i]:remove() end
+        end
+    end
+    return original_remove(self, ...)
 end
 
 local original_update = Game.update_round_eval

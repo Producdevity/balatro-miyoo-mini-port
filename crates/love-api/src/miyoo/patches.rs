@@ -490,6 +490,12 @@ pub(crate) fn patch_miyoo_script(file_path: &str, data: &mut Vec<u8>) {
             ),
         ],
         "engine/ui.lua" => &[
+            // Width constraints can run layout twice during construction. Register
+            // each element once, including children added during recalculation.
+            (
+                "function UIElement:set_values(_T, recalculate)\n    if not recalculate or not self.T then",
+                "function UIElement:set_values(_T, recalculate)\n    if not self.T then",
+            ),
             (
                 "function UIElement:remove()\n",
                 "function UIElement:remove()\n    if self.config and self.config.text_drawable then\n        self.config.text_drawable:release()\n        self.config.text_drawable = nil\n    end\n",
