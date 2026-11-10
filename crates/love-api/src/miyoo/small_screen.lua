@@ -29,10 +29,10 @@ local HAND_W = 6.8*G.CARD_W
 local LAYOUT_DIAGNOSTICS = os.getenv('BALATRO_LAYOUT_DIAGNOSTICS') == '1'
 
 local HUD_INNER_W = ROOM_W - SAFE_MARGIN*2 - 0.9
-local HUD_BLIND_W = HUD_INNER_W*0.28
+local HUD_BLIND_W = HUD_INNER_W*0.255
 local HUD_SCORE_W = HUD_INNER_W*0.165
 local HUD_HAND_W = HUD_INNER_W*0.295
-local HUD_META_W = HUD_INNER_W*0.26
+local HUD_META_W = HUD_INNER_W*0.285
 
 local SCORE_SCALE = 0.92
 local SCORE_TEXT_W = HUD_SCORE_W - 0.26
@@ -592,12 +592,24 @@ function G.UIDEF.shop()
         {card_limit=2, type='shop', highlight_limit=1,
             card_w=1.27*G.CARD_W})
 
+    -- The desktop sign, scaled into the HUD's empty blind slot.
+    local sign_h = HUD_ROW_H - 0.3
+    local shop_sign = AnimatedSprite(0, 0, 2*sign_h, sign_h, G.ANIMATION_ATLAS['shop_sign'])
+    shop_sign:define_draw_steps({
+        {shader='dissolve', shadow_height=0.05},
+        {shader='dissolve'}
+    })
     G.SHOP_SIGN = UIBox{
-        definition={n=G.UIT.ROOT, config={align='cm', minw=0.01,
-            minh=0.01, colour=G.C.CLEAR}, nodes={}},
-        config={align='tli', offset={x=-20,y=-20}, major=G.ROOM_ATTACH}
+        definition={n=G.UIT.ROOT, config={align='cm', colour=G.C.CLEAR}, nodes={
+            {n=G.UIT.O, config={object=shop_sign}}
+        }},
+        config={align='cm', offset={x=0, y=-15}, major=G.HUD:get_UIE_by_ID('row_blind'),
+            bond='Weak'}
     }
-    G.SHOP_SIGN.states.visible = false
+    G.E_MANAGER:add_event(Event({trigger='immediate', func=function()
+        G.SHOP_SIGN.alignment.offset.y = 0
+        return true
+    end}))
 
     local function plate(width, nodes)
         return {n=G.UIT.C, config={align='cm', padding=0.15, minw=width,
@@ -714,7 +726,6 @@ function create_UIBox_HUD()
     local score_row_h = score_text_h + 0.04
     local target_text_h = text_height(TARGET_SCALE)
     local target_row_h = target_text_h + 0.04
-    local dollars_box_h = text_height(DOLLARS_SCALE, numeric) + 0.08
 
     local name_box_w = HUD_HAND_W - 0.06
     local name_box_h = text_height(HAND_TEXT_SCALE)
@@ -791,57 +802,53 @@ function create_UIBox_HUD()
         }}
     }}
 
+    -- Desktop-style stat cell: small label above the value.
+    local function stat(key, width, extra, value)
+        local config = {align='cm', minw=width, minh=0.8, padding=0.03, r=0.08,
+            colour=inset}
+        for k, v in pairs(extra or {}) do config[k] = v end
+        return {n=G.UIT.C, config=config, nodes={
+            {n=G.UIT.R, config={align='cm'}, nodes={label(localize(key), 0.3)}},
+            {n=G.UIT.R, config={align='cm'}, nodes={value}}
+        }}
+    end
+
     local meta = {n=G.UIT.C, config={align='cm', minw=HUD_META_W, minh=row_h,
-        padding=0.07, r=0.1, colour=panel, emboss=0.05}, nodes={
-        {n=G.UIT.R, config={align='cm', minh=0.72}, nodes={
-            {n=G.UIT.C, config={align='cm', minw=1.3, minh=dollars_box_h,
+        padding=0.05, r=0.1, colour=panel, emboss=0.05}, nodes={
+        {n=G.UIT.R, config={align='cm', minh=0.8}, nodes={
+            {n=G.UIT.C, config={align='cm', minw=1.3, minh=0.8,
                 padding=0.03, r=0.08, colour=inset}, nodes={
                 dyn(G.GAME, 'dollars', G.C.MONEY, DOLLARS_SCALE, 'dollar_text_UI',
                     {prefix=localize('$'), bump=true,
                         func='small_screen_dollars'})
             }},
             gap(0.06),
-            {n=G.UIT.C, config={id='hud_hands', align='cm', minw=1.0,
-                minh=0.66, padding=0.03, r=0.08, colour=inset}, nodes={
-                label('H', 0.5, G.C.BLUE),
-                gap(0.04),
-                dyn(G.GAME.current_round, 'hands_left', G.C.BLUE, 0.76, 'hand_UI_count')
-            }},
+            stat('k_hud_hands', 1.3, {id='hud_hands'},
+                dyn(G.GAME.current_round, 'hands_left', G.C.BLUE, 0.62, 'hand_UI_count')),
             gap(0.06),
-            {n=G.UIT.C, config={align='cm', minw=1.0, minh=0.66,
-                padding=0.03, r=0.08, colour=inset}, nodes={
-                label('D', 0.5, G.C.RED),
-                gap(0.04),
-                dyn(G.GAME.current_round, 'discards_left', G.C.RED, 0.76, 'discard_UI_count')
-            }}
+            stat('k_hud_discards', 1.45, nil,
+                dyn(G.GAME.current_round, 'discards_left', G.C.RED, 0.62, 'discard_UI_count'))
         }},
-        {n=G.UIT.R, config={align='cm', minh=0.72}, nodes={
-            {n=G.UIT.C, config={id='hud_ante', align='cm', minw=1.72,
-                minh=0.66, padding=0.03, r=0.08, colour=inset}, nodes={
-                label('A', 0.5, G.C.IMPORTANT),
-                gap(0.04),
-                dyn(G.GAME.round_resets, 'ante', G.C.IMPORTANT, 0.76, 'ante_UI_count'),
-                label('/', 0.42),
+        {n=G.UIT.R, config={align='cm', minh=0.8}, nodes={
+            stat('k_ante', 1.3, {id='hud_ante'}, {n=G.UIT.R, config={align='cm'}, nodes={
+                dyn(G.GAME.round_resets, 'ante', G.C.IMPORTANT, 0.62, 'ante_UI_count'),
+                label('/', 0.36),
                 {n=G.UIT.T, config={ref_table=G.GAME, ref_value='win_ante',
-                    scale=0.5, colour=G.C.WHITE, shadow=true}}
-            }},
+                    scale=0.4, colour=G.C.WHITE, shadow=true}}
+            }}),
             gap(0.06),
-            {n=G.UIT.C, config={align='cm', minw=1.14, minh=0.66,
-                padding=0.03, r=0.08, colour=inset}, nodes={
-                label('R', 0.5, G.C.IMPORTANT),
-                gap(0.04),
-                dyn(G.GAME, 'round', G.C.IMPORTANT, 0.76, 'round_UI_count')
-            }},
+            stat('k_round', 1.0, nil,
+                dyn(G.GAME, 'round', G.C.IMPORTANT, 0.62, 'round_UI_count')),
             gap(0.06),
             {n=G.UIT.C, config={id='run_info_button', align='cm', minw=0.48,
-                minh=0.66, padding=0.03, r=0.08, colour=G.C.RED,
+                minh=0.8, padding=0.03, r=0.08, colour=G.C.RED,
                 hover=true, button='run_info', shadow=true,
                 focus_args={button=G.F_GUIDE and 'guide' or 'back', orientation='bm'}}, nodes={
                 label('i', 0.52)
             }},
             gap(0.06),
             {n=G.UIT.C, config={id='options_button', align='cm', minw=0.48,
-                minh=0.66, padding=0.03, r=0.08, colour=G.C.ORANGE,
+                minh=0.8, padding=0.03, r=0.08, colour=G.C.ORANGE,
                 hover=true, button='options', shadow=true,
                 focus_args={button='start', orientation='bm'}}, nodes={
                 label('II', 0.42)
@@ -862,11 +869,10 @@ end
 function create_UIBox_HUD_blind()
     local box_w = HUD_BLIND_W - 0.12
     local inner_w = box_w - 0.12
-    G.GAME.blind:change_dim(0.62, 0.62)
-    local hidden_reward = {text=''}
+    G.GAME.blind:change_dim(0.75, 0.75)
     return {n=G.UIT.ROOT, config={id='HUD_blind', func='HUD_blind_visible',
-        align='cm', minw=box_w, maxw=box_w, minh=1.5,
-        padding=0.05, r=0.1,
+        align='cm', minw=box_w, maxw=box_w, minh=HUD_ROW_H - 0.12,
+        padding=0.08, r=0.1,
         colour=G.C.BLACK, emboss=0.05}, nodes={
         {n=G.UIT.R, config={align='cm', minh=text_height(BLIND_NAME_SCALE) + 0.08,
             maxw=inner_w, r=0.08,
@@ -877,6 +883,17 @@ function create_UIBox_HUD_blind()
                 string={{ref_table=G.GAME.blind, ref_value='loc_name'}},
                 colours={G.C.UI.TEXT_LIGHT}, shadow=true, rotate=true,
                 silent=true, float=true, scale=BLIND_NAME_SCALE, y_offset=-2})}}
+        }},
+        {n=G.UIT.R, config={align='cm', minh=0.5, maxw=inner_w,
+            func='HUD_blind_reward'}, nodes={
+            {n=G.UIT.T, config={text=localize('ph_blind_reward'), scale=0.45,
+                colour=G.C.WHITE}},
+            {n=G.UIT.O, config={id='dollars_to_be_earned', object=DynaText({
+                string={{ref_table=G.GAME.current_round, ref_value='dollars_to_be_earned'}},
+                colours={G.C.MONEY}, shadow=true, rotate=true, bump=true, silent=true,
+                scale=0.65})}},
+            {n=G.UIT.T, config={id='HUD_blind_count', ref_table=G.GAME.blind,
+                ref_value='chip_text', scale=0.001, colour=G.C.CLEAR, no_recalc=true}}
         }},
         {n=G.UIT.R, config={align='cm', minh=0.27, maxw=inner_w,
             colour=G.C.DYN_UI.DARK}, nodes={
@@ -891,16 +908,6 @@ function create_UIBox_HUD_blind()
             {n=G.UIT.T, config={id='HUD_blind_debuff_2',
                 ref_table=G.GAME.blind.loc_debuff_lines, ref_value=2,
                 scale=0.4, colour=G.C.UI.TEXT_LIGHT, func='HUD_blind_debuff'}}
-        }},
-        {n=G.UIT.R, config={align='cm', minh=0.001}, nodes={
-            {n=G.UIT.C, config={align='cm'}, nodes={
-                {n=G.UIT.T, config={id='HUD_blind_count', ref_table=G.GAME.blind,
-                    ref_value='chip_text', scale=0.001, colour=G.C.CLEAR,
-                    no_recalc=true}},
-                {n=G.UIT.O, config={id='dollars_to_be_earned', object=DynaText({
-                    string={{ref_table=hidden_reward, ref_value='text'}},
-                    colours={G.C.CLEAR}, silent=true, scale=0.01})}}
-            }}
         }}
     }}
 end
@@ -1037,7 +1044,6 @@ function Game:update_shop(dt)
             pin_run_overlay(G.shop, y, x)
         end
     end
-    if G.SHOP_SIGN then G.SHOP_SIGN.states.visible = false end
     return result
 end
 

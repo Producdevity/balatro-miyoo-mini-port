@@ -1175,8 +1175,11 @@ fn background_cache_refreshes_for_palette_or_size_changes() {
     cache.buffer.resize(320, 240);
     cache.colours = colours;
     cache.valid = true;
+    cache.refreshed_at = Some(std::time::Instant::now());
 
     assert!(!cache.needs_refresh(320, 240, &colours));
     assert!(cache.needs_refresh(640, 480, &colours));
     assert!(cache.needs_refresh(320, 240, &[[1.0; 4]; 3]));
+    cache.refreshed_at = cache.interval.map(|i| std::time::Instant::now() - i);
+    assert_eq!(cache.needs_refresh(320, 240, &colours), cache.interval.is_some());
 }

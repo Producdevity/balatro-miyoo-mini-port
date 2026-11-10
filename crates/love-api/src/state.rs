@@ -244,6 +244,9 @@ pub struct BackgroundCache {
     pub buffer: PixelBuffer,
     pub colours: [[f32; 4]; 3],
     pub valid: bool,
+    pub refreshed_at: Option<std::time::Instant>,
+    /// Redraw period for the swirl animation; None keeps it static.
+    pub interval: Option<std::time::Duration>,
 }
 
 impl BackgroundCache {
@@ -252,6 +255,16 @@ impl BackgroundCache {
             buffer: PixelBuffer::new(0, 0),
             colours: [[0.0; 4]; 3],
             valid: false,
+            refreshed_at: None,
+            // A full swirl redraw costs several ms on the Mini, so animate at a low rate.
+            interval: match std::env::var("BALATRO_BACKGROUND_MS")
+                .ok()
+                .and_then(|v| v.parse::<u64>().ok())
+            {
+                Some(0) => None,
+                Some(ms) => Some(std::time::Duration::from_millis(ms)),
+                None => Some(std::time::Duration::from_millis(200)),
+            },
         }
     }
 
@@ -260,6 +273,9 @@ impl BackgroundCache {
             || self.buffer.width != width
             || self.buffer.height != height
             || self.colours != *colours
+            || self.interval.is_some_and(|interval| {
+                self.refreshed_at.is_none_or(|at| at.elapsed() >= interval)
+            })
     }
 }
 

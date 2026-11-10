@@ -764,6 +764,20 @@ fn native_present_enabled() -> bool {
     *ENABLED
 }
 
+/// Brightness kept on odd output rows, from BALATRO_SCANLINES (percent darkening).
+#[cfg(any(target_os = "linux", test))]
+fn scanline_keep() -> u8 {
+    static KEEP: std::sync::LazyLock<u8> = std::sync::LazyLock::new(|| {
+        let percent = std::env::var("BALATRO_SCANLINES")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(0)
+            .min(100);
+        (255 - percent * 255 / 100) as u8
+    });
+    *KEEP
+}
+
 #[cfg(any(target_os = "linux", test))]
 fn blit_native(
     source: &[u8],
@@ -780,7 +794,14 @@ fn blit_native(
         let source = &source[source_y * row_bytes..(source_y + 1) * row_bytes];
         let destination = &mut destination[y * stride..y * stride + row_bytes];
         if native_present_enabled() && matches!(indices, [0, 1, 2, 3] | [2, 1, 0, 3]) {
-            sprite_to_text::pixel_copy::copy_rgba(source, destination, indices[0] == 2, rotate_180);
+            let keep = if y % 2 == 1 { scanline_keep() } else { 255 };
+            sprite_to_text::pixel_copy::copy_rgba(
+                source,
+                destination,
+                indices[0] == 2,
+                rotate_180,
+                keep,
+            );
             continue;
         }
         if !rotate_180 && indices == [0, 1, 2, 3] {

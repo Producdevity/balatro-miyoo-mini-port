@@ -407,6 +407,7 @@ pub(super) fn register(
                                     );
                                     cache.colours = colours;
                                     cache.valid = true;
+                                    cache.refreshed_at = Some(std::time::Instant::now());
                                 }
                                 pb.pixels.copy_from_slice(&cache.buffer.pixels);
                             } else {

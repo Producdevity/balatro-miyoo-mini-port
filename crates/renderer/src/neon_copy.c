@@ -1,8 +1,10 @@
 #include <arm_neon.h>
 #include <stdint.h>
 
+/* keep (0-255) scales RGB for scanline rows; 255 leaves pixels unchanged. */
 void balatro_copy_pixels(const uint8_t *restrict source, uint8_t *restrict destination,
-                         uint32_t count, uint32_t swap_rb, uint32_t reverse) {
+                         uint32_t count, uint32_t swap_rb, uint32_t reverse, uint32_t keep) {
+    uint8x8_t factor = vdup_n_u8((uint8_t)keep);
     if (reverse) source += count * 4;
     while (count >= 8) {
         if (reverse) source -= 32;
@@ -15,6 +17,10 @@ void balatro_copy_pixels(const uint8_t *restrict source, uint8_t *restrict desti
             pixels.val[0] = pixels.val[2];
             pixels.val[2] = red;
         }
+        if (keep < 255) {
+            for (unsigned i = 0; i < 3; ++i)
+                pixels.val[i] = vshrn_n_u16(vmull_u8(pixels.val[i], factor), 8);
+        }
         vst4_u8(destination, pixels);
         if (!reverse) source += 32;
         destination += 32;
@@ -22,9 +28,9 @@ void balatro_copy_pixels(const uint8_t *restrict source, uint8_t *restrict desti
     }
     while (count--) {
         if (reverse) source -= 4;
-        destination[0] = source[swap_rb ? 2 : 0];
-        destination[1] = source[1];
-        destination[2] = source[swap_rb ? 0 : 2];
+        destination[0] = keep < 255 ? source[swap_rb ? 2 : 0] * keep >> 8 : source[swap_rb ? 2 : 0];
+        destination[1] = keep < 255 ? source[1] * keep >> 8 : source[1];
+        destination[2] = keep < 255 ? source[swap_rb ? 0 : 2] * keep >> 8 : source[swap_rb ? 0 : 2];
         destination[3] = source[3];
         if (!reverse) source += 4;
         destination += 4;

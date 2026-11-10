@@ -41,5 +41,27 @@ Notes for updating the skill after the Balatro fork (2026-11-11).
   resident instead of reloading after 250 ms idle. CJK fonts now expire after 2 s
   instead of 250 ms; peak memory is unchanged since only one large font is held.
   English uses m6x11plus, which never had this pause.
-- Layout not changed. Restoring the desktop HUD arrangement at 640x480 needs a
-  device look first; the upstream single-room layout is kept.
+
+## Round 2 (after the user's device test)
+
+Device QA ran over SSH (Miyoo at 192.168.1.4, Wi-Fi ~13 KB/s, so the runtime
+is sent gzipped). Onion's `cmd_to_run.sh` + `killall MainUI` route did not
+launch the port; pausing MainUI with `killall -STOP`, running the launcher with
+autoplay env vars and a separate save dir, then `-CONT` worked and left the
+user's saves alone. Framebuffer screenshots: `cat /dev/fb0`, visible page from
+`/sys/class/graphics/fb0/pan`, BGRA, rotated 180°.
+
+- Font: the original m6x11plus is used again (upstream swapped in Nunito;
+  `BALATRO_FONT=nunito` restores that).
+- SHOP sign: the game's animated sign sits in the HUD's blind slot.
+- Background: the swirl redraws every 200 ms (`BALATRO_BACKGROUND_MS`, 0 =
+  static). The float bilinear fill took ~70 ms per redraw on the Mini and cost
+  ~6 fps in the shop; a fixed-point span fill brought the cost to ~1-3 fps.
+- Scanlines: odd output rows are darkened in the NEON copy on the presenter
+  thread (`BALATRO_SCANLINES`, percent, launcher default 18). No raster cost.
+- HUD: blind reward row restored (it was hidden and left empty space),
+  labelled Hands/Discards/Ante/Round cells like desktop.
+- Performance at stock clock, 3600-frame autoplay (seed 1): ~29-30 fps mean
+  after the menu, ~25 fps in the shop. Shop Lua is ~7 ms move + ~7.5 ms UIBox
+  draw per frame. Selective LuaJIT scopes (`move`, `scan-minor-ui`) were within
+  noise, and the performance governor made no measurable difference.

@@ -1,5 +1,6 @@
 /// Copy packed RGBA pixels, optionally swapping red/blue or reversing pixel order.
-pub fn copy_rgba(source: &[u8], destination: &mut [u8], swap_rb: bool, reverse: bool) {
+/// `keep` below 255 darkens RGB by keep/256 (scanline rows).
+pub fn copy_rgba(source: &[u8], destination: &mut [u8], swap_rb: bool, reverse: bool, keep: u8) {
     assert_eq!(source.len(), destination.len());
     assert_eq!(source.len() % 4, 0);
     if source.is_empty() {
@@ -15,6 +16,7 @@ pub fn copy_rgba(source: &[u8], destination: &mut [u8], swap_rb: bool, reverse: 
                 count: u32,
                 swap_rb: u32,
                 reverse: u32,
+                keep: u32,
             );
         }
         // Equal, disjoint slices contain complete pixels. The native loop
@@ -26,6 +28,7 @@ pub fn copy_rgba(source: &[u8], destination: &mut [u8], swap_rb: bool, reverse: 
                 (source.len() / 4) as u32,
                 u32::from(swap_rb),
                 u32::from(reverse),
+                u32::from(keep),
             );
         }
         return;
@@ -42,6 +45,11 @@ pub fn copy_rgba(source: &[u8], destination: &mut [u8], swap_rb: bool, reverse: 
         target.copy_from_slice(pixel);
         if swap_rb {
             target.swap(0, 2);
+        }
+        if keep < 255 {
+            for c in &mut target[..3] {
+                *c = (*c as u16 * keep as u16 >> 8) as u8;
+            }
         }
     }
 }
@@ -76,6 +84,7 @@ mod tests {
                                 &mut actual[destination_offset..destination_offset + count * 4],
                                 swap,
                                 reverse,
+                                255,
                             );
                             assert_eq!(actual, expected,
                                 "count={count} source={source_offset} destination={destination_offset} swap={swap} reverse={reverse}");
@@ -84,5 +93,13 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn keep_darkens_rgb_but_not_alpha() {
+        let source = [200, 100, 50, 255, 0, 255, 128, 7];
+        let mut actual = [0; 8];
+        copy_rgba(&source, &mut actual, false, false, 128);
+        assert_eq!(actual, [100, 50, 25, 255, 0, 127, 64, 7]);
     }
 }
