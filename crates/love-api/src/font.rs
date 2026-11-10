@@ -9,7 +9,9 @@ use std::time::{Duration, Instant};
 
 // Precomputed outlines suit small UI fonts, but expand CJK fonts substantially.
 const OUTLINE_CACHE_MAX_BYTES: usize = 256 * 1024;
-const LARGE_FONT_IDLE_TIME: Duration = Duration::from_millis(250);
+const LARGE_FONT_IDLE_TIME: Duration = Duration::from_secs(2);
+// Latin NotoSans (~570 KiB) stays resident so its languages never reload mid-play.
+const RESIDENT_FONT_MAX_BYTES: usize = 1024 * 1024;
 
 #[derive(Default)]
 pub struct FontCache {
@@ -19,6 +21,7 @@ pub struct FontCache {
 struct CachedFont {
     path: String,
     font: Arc<RasterFont>,
+    bytes: usize,
     last_used: Instant,
 }
 
@@ -29,10 +32,11 @@ impl FontCache {
         Some(Arc::clone(&cached.font))
     }
 
-    fn insert(&mut self, path: String, font: Arc<RasterFont>) {
+    fn insert(&mut self, path: String, font: Arc<RasterFont>, bytes: usize) {
         self.large = Some(CachedFont {
             path,
             font,
+            bytes,
             last_used: Instant::now(),
         });
     }
@@ -41,7 +45,10 @@ impl FontCache {
         if self
             .large
             .as_ref()
-            .is_some_and(|cached| cached.last_used.elapsed() >= LARGE_FONT_IDLE_TIME)
+            .is_some_and(|cached| {
+                cached.bytes > RESIDENT_FONT_MAX_BYTES
+                    && cached.last_used.elapsed() >= LARGE_FONT_IDLE_TIME
+            })
         {
             self.large = None;
         }
@@ -175,10 +182,11 @@ impl FontData {
                     .ok()?;
                 Some(LoadedFont::Small(Arc::new(RasterFont::Cached(font))))
             } else {
+                let bytes = data.len();
                 let font = RasterFont::from_large(data)
                     .map_err(|error| eprintln!("[font] {}: {error}", self.path))
                     .ok()?;
-                cache.insert(self.path.clone(), Arc::new(font));
+                cache.insert(self.path.clone(), Arc::new(font), bytes);
                 Some(LoadedFont::Large)
             }
         });
@@ -197,12 +205,13 @@ impl FontData {
                     .read_file(&self.path)
                     .map_err(|error| eprintln!("[font] {}: {error}", self.path))
                     .ok()?;
+                let bytes = data.len();
                 let font = Arc::new(
                     RasterFont::from_large(data)
                         .map_err(|error| eprintln!("[font] {}: {error}", self.path))
                         .ok()?,
                 );
-                cache.insert(self.path.clone(), Arc::clone(&font));
+                cache.insert(self.path.clone(), Arc::clone(&font), bytes);
                 Some(font)
             }
         }
@@ -343,7 +352,7 @@ mod tests {
             RasterFont::from_large(include_bytes!("../assets/Nunito-Black.ttf").to_vec()).unwrap(),
         );
         let weak = Arc::downgrade(&font);
-        cache.insert("font.ttf".to_owned(), font);
+        cache.insert("font.ttf".to_owned(), font, RESIDENT_FONT_MAX_BYTES + 1);
         cache.large.as_mut().unwrap().last_used -= LARGE_FONT_IDLE_TIME;
         assert!(cache.get("font.ttf").is_some());
         cache.release_idle();
@@ -351,6 +360,18 @@ mod tests {
         cache.large.as_mut().unwrap().last_used -= LARGE_FONT_IDLE_TIME;
         cache.release_idle();
         assert!(weak.upgrade().is_none());
+    }
+
+    #[test]
+    fn latin_sized_fonts_stay_resident() {
+        let mut cache = FontCache::default();
+        let font = Arc::new(
+            RasterFont::from_large(include_bytes!("../assets/Nunito-Black.ttf").to_vec()).unwrap(),
+        );
+        cache.insert("font.ttf".to_owned(), font, RESIDENT_FONT_MAX_BYTES);
+        cache.large.as_mut().unwrap().last_used -= LARGE_FONT_IDLE_TIME * 10;
+        cache.release_idle();
+        assert!(cache.large.is_some());
     }
 
     #[test]
@@ -443,6 +464,10 @@ mod tests {
             drop(font);
             cache.lock().large.as_mut().unwrap().last_used -= LARGE_FONT_IDLE_TIME;
             cache.lock().release_idle();
+            if name == "NotoSans-Bold.ttf" {
+                assert!(cache.lock().large.is_some(), "Latin font was released");
+                cache.lock().large = None;
+            }
             assert!(cache.lock().large.is_none());
             assert!(unloaded.upgrade().is_none());
             assert_eq!(data.text_width_at(text, 40.0).ceil() as u32, width);

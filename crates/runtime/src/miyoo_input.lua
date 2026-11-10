@@ -137,7 +137,39 @@ local function dispatch(controller, dt)
     if first > last then first, last = 1, 0 end
 end
 
+-- The game's held-direction repeat (0.3 s, then 0.1 s) counts its smoothed dt,
+-- which it caps at 0.1 s. At handheld frame rates that makes repeats several
+-- times slower than desktop. Feed held directions wall-clock time instead and
+-- keep the remainder that the game's reset to zero would discard.
+local hold_clock = {}
+local function wall_clock_hold(controller)
+    if controller.miyoo_wall_hold then return end
+    controller.miyoo_wall_hold = true
+    local original_hold = controller.button_hold_update
+    local original_release = controller.button_release_update
+    controller.button_hold_update = function(self, button, dt)
+        if not (button == 'dpleft' or button == 'dpright' or
+            button == 'dpup' or button == 'dpdown') then
+            return original_hold(self, button, dt)
+        end
+        local now = love.timer.getTime()
+        local elapsed = math.min(now - (hold_clock[button] or now - dt), 0.5)
+        hold_clock[button] = now
+        local before = self.held_button_times[button]
+        local threshold = self.repress_timer or 0.3
+        original_hold(self, button, elapsed)
+        if before and before + elapsed > threshold and self.held_button_times[button] == 0 then
+            self.held_button_times[button] = math.min(before + elapsed - threshold, 0.09)
+        end
+    end
+    controller.button_release_update = function(self, button, dt)
+        hold_clock[button] = nil
+        return original_release(self, button, dt)
+    end
+end
+
 love.update = function(dt)
     G.CONTROLLER.miyoo_dispatch = dispatch
+    wall_clock_hold(G.CONTROLLER)
     if original_update then original_update(dt) end
 end

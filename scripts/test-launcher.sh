@@ -34,6 +34,12 @@ check_restored() {
     [ "$(cat "$WORK/changes")" = "$(printf '1500\n1200')" ]
 }
 
+# Stock clock by default.
+reset_case
+sh "$WORK/game/script.sh"
+[ ! -s "$WORK/changes" ]
+
+export BALATRO_CPU_MHZ=1500
 reset_case
 sh "$WORK/game/script.sh"
 check_restored

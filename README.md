@@ -22,8 +22,9 @@ audio; let it finish. If interrupted, launch again to resume.
 Saves are stored in `Saves/CurrentProfile/saves/Balatro`. Back them up before
 updating.
 
-The launcher requests 1.5 GHz through Onion's clock helper and restores the
-previous clock on exit. Set `BALATRO_CPU_MHZ=off` to disable this.
+The launcher keeps the stock CPU clock. To overclock, set `BALATRO_CPU_MHZ`
+(1200-1600) in `script.sh`; it uses Onion's clock helper and restores the
+previous clock on exit.
 
 ## Reporting problems
 
