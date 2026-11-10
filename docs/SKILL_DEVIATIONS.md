@@ -65,3 +65,18 @@ user's saves alone. Framebuffer screenshots: `cat /dev/fb0`, visible page from
   after the menu, ~25 fps in the shop. Shop Lua is ~7 ms move + ~7.5 ms UIBox
   draw per frame. Selective LuaJIT scopes (`move`, `scan-minor-ui`) were within
   noise, and the performance governor made no measurable difference.
+
+## Round 3 (second device review)
+
+- HUD sits in a full-width translucent band with the MAIN-coloured rim, like
+  the desktop sidebar turned sideways. The hand keeps its translucent plate.
+- Chip/mult boxes use the desktop 2:1 shape (1.7x0.85); the freed width went to
+  the blind and stat boxes. The score target row is red-tinted, with even margins.
+- Shop rows share column widths, so the panel's edges and seams line up.
+- Flames: desktop draws a 2.5x2.5 sprite on a 2x1 box. On the smaller HUD that
+  ran off the top of the screen; the sprite is now 1.25x box width, 1.7x height.
+- A, B or Start skips the intro (the splash lock blocked the controller's own
+  Start path). Replay: `BALATRO_TEST_CONTROLS=splash-skip`.
+- Reported lost second D-pad tap before A: not reproduced. `tap-select`
+  replays seven tap patterns, also injected as raw evdev records on the Mini
+  (`BALATRO_TAP_EVDEV=/dev/input/event0`); all pass.

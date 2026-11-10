@@ -108,6 +108,16 @@ local function dispatch(controller, dt)
         local button, down = event[1], event[2]
         local direction = button == 'dpleft' or button == 'dpright' or
             button == 'dpup' or button == 'dpdown'
+        if down and G.STATES and G.STATE == G.STATES.SPLASH and
+            (button == 'a' or button == 'b' or button == 'start') then
+            -- Desktop skips the intro on Escape or a click; the splash lock
+            -- blocks the controller's own Start path.
+            events[first] = nil
+            first = first + 1
+            G:delete_run()
+            G:main_menu()
+            break
+        end
         if down and pressed and not (direction and navigation) then break end
         local expired = event[2] and event[4] and love.timer.getTime() - event[3] > 0.5
         local locks = controller.locks

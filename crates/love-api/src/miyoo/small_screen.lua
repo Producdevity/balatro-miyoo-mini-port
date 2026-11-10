@@ -29,10 +29,10 @@ local HAND_W = 6.8*G.CARD_W
 local LAYOUT_DIAGNOSTICS = os.getenv('BALATRO_LAYOUT_DIAGNOSTICS') == '1'
 
 local HUD_INNER_W = ROOM_W - SAFE_MARGIN*2 - 0.9
-local HUD_BLIND_W = HUD_INNER_W*0.255
+local HUD_BLIND_W = HUD_INNER_W*0.27
 local HUD_SCORE_W = HUD_INNER_W*0.165
-local HUD_HAND_W = HUD_INNER_W*0.295
-local HUD_META_W = HUD_INNER_W*0.285
+local HUD_HAND_W = HUD_INNER_W*0.265
+local HUD_META_W = HUD_INNER_W*0.30
 
 local SCORE_SCALE = 0.92
 local SCORE_TEXT_W = HUD_SCORE_W - 0.26
@@ -40,7 +40,8 @@ local TARGET_SCALE = 0.62
 local HAND_TEXT_SCALE = 0.68
 local HAND_LEVEL_MULT = 0.72
 local HAND_NUM_SCALE = 0.96
-local HAND_NUM_BOX_W = 2.0
+local HAND_NUM_BOX_W = 1.7
+local HAND_NUM_BOX_H = 0.85
 local HAND_BOX_PAD = 0.06
 local DOLLARS_SCALE = 0.74
 local DOLLARS_W = 1.24
@@ -237,9 +238,10 @@ local original_cardarea_draw = CardArea.draw
 function CardArea:draw(...)
     local result = original_cardarea_draw(self, ...)
     local box = self.children.area_uibox
-    if box and not box.small_screen_plate_hidden then
+    -- The hand keeps the desktop's translucent plate and card count.
+    if box and self ~= G.hand and not box.small_screen_plate_hidden then
         box.small_screen_plate_hidden = true
-        if self == G.hand or self == G.jokers or self == G.consumeables then
+        if self == G.jokers or self == G.consumeables then
             box.states.visible = false
         end
         local plate = box.UIRoot and box.UIRoot.children and box.UIRoot.children[1]
@@ -612,7 +614,7 @@ function G.UIDEF.shop()
     end}))
 
     local function plate(width, nodes)
-        return {n=G.UIT.C, config={align='cm', padding=0.15, minw=width,
+        return {n=G.UIT.C, config={align='cm', padding=0.1, minw=width,
             r=0.15, colour=G.C.L_BLACK, emboss=0.05}, nodes=nodes}
     end
 
@@ -622,8 +624,13 @@ function G.UIDEF.shop()
         }}
     end
 
+    -- Both shelf rows share column widths so the panel's margins line up.
+    local shelf_w = math.max(7.9, G.shop_jokers.T.w + 1.4)
+    local voucher_w = math.max(3.16, G.shop_vouchers.T.w + 0.2)
+    local button_w = voucher_w - 2*0.08
+
     local controls = {n=G.UIT.C, config={align='cm', padding=0.08}, nodes={
-        {n=G.UIT.R, config={id='next_round_button', align='cm', minw=3.0,
+        {n=G.UIT.R, config={id='next_round_button', align='cm', minw=button_w,
             minh=1.45, padding=0.06, r=0.14, colour=G.C.RED,
             one_press=true, button='toggle_shop', hover=true, shadow=true}, nodes={
             {n=G.UIT.R, config={align='cm', padding=0.04,
@@ -636,7 +643,7 @@ function G.UIDEF.shop()
                 }}
             }}
         }},
-        {n=G.UIT.R, config={align='cm', minw=3.0, minh=1.5,
+        {n=G.UIT.R, config={align='cm', minw=button_w, minh=1.5,
             padding=0.06, r=0.14, colour=G.C.GREEN,
             button='reroll_shop', func='can_reroll', hover=true, shadow=true}, nodes={
             {n=G.UIT.R, config={align='cm', padding=0.04,
@@ -654,11 +661,11 @@ function G.UIDEF.shop()
         }}
     }}
 
-    local card_shelf = plate(math.max(7.9, G.shop_jokers.T.w + 1.4), {
+    local card_shelf = plate(shelf_w, {
         area_row(G.shop_jokers)
     })
 
-    local voucher = plate(nil, {
+    local voucher = plate(voucher_w, {
         area_row(G.shop_vouchers),
         {n=G.UIT.R, config={align='cm', maxw=G.shop_vouchers.T.w}, nodes={
             {n=G.UIT.T, config={text=localize{type='variable',
@@ -667,7 +674,7 @@ function G.UIDEF.shop()
         }}
     })
 
-    local boosters = plate(nil, {area_row(G.shop_booster)})
+    local boosters = plate(shelf_w, {area_row(G.shop_booster)})
 
     return {n=G.UIT.ROOT, config={align='cm', padding=0.03,
         maxh=ROOM_H-RUN_OVERLAY_Y-SAFE_MARGIN,
@@ -731,8 +738,12 @@ function create_UIBox_HUD()
     local name_box_h = text_height(HAND_TEXT_SCALE)
     local num_text_w = HAND_NUM_BOX_W - 2*HAND_BOX_PAD
     local num_text_h = text_height(HAND_NUM_SCALE, numeric)
-    local num_box_h = num_text_h + 2*HAND_BOX_PAD
+    local num_box_h = math.max(num_text_h + 2*HAND_BOX_PAD, HAND_NUM_BOX_H)
     local row_h = math.max(HUD_ROW_H, name_box_h + num_box_h + 0.06 + 0.09)
+    -- Split the score box's height so its margins match on every side.
+    local score_rows_h = row_h - 0.06*3
+    score_row_h = math.max(score_row_h, score_rows_h*0.58)
+    target_row_h = math.max(target_row_h, score_rows_h - score_row_h)
 
     local score_text = FixedText(SCORE_TEXT_W, score_text_h,
         {scale=SCORE_SCALE, font=numeric, colour=G.C.WHITE})
@@ -761,7 +772,7 @@ function create_UIBox_HUD()
                 h=score_text_h, object=score_text, func='chip_UI_set'}}
         }},
         {n=G.UIT.R, config={align='cm', minw=HUD_SCORE_W-0.12, minh=target_row_h,
-            r=0.08, colour=darken(G.C.BLACK, 0.4)}, nodes={
+            r=0.08, colour=mix_colours(G.C.RED, inset, 0.18)}, nodes={
             {n=G.UIT.O, config={id='small_screen_blind_target', w=SCORE_TEXT_W,
                 h=target_text_h, object=target_text,
                 func='small_screen_blind_target'}}
@@ -830,24 +841,24 @@ function create_UIBox_HUD()
                 dyn(G.GAME.current_round, 'discards_left', G.C.RED, 0.62, 'discard_UI_count'))
         }},
         {n=G.UIT.R, config={align='cm', minh=0.8}, nodes={
-            stat('k_ante', 1.3, {id='hud_ante'}, {n=G.UIT.R, config={align='cm'}, nodes={
+            stat('k_ante', 1.55, {id='hud_ante'}, {n=G.UIT.R, config={align='cm'}, nodes={
                 dyn(G.GAME.round_resets, 'ante', G.C.IMPORTANT, 0.62, 'ante_UI_count'),
                 label('/', 0.36),
                 {n=G.UIT.T, config={ref_table=G.GAME, ref_value='win_ante',
                     scale=0.4, colour=G.C.WHITE, shadow=true}}
             }}),
             gap(0.06),
-            stat('k_round', 1.0, nil,
+            stat('k_round', 1.25, nil,
                 dyn(G.GAME, 'round', G.C.IMPORTANT, 0.62, 'round_UI_count')),
             gap(0.06),
-            {n=G.UIT.C, config={id='run_info_button', align='cm', minw=0.48,
+            {n=G.UIT.C, config={id='run_info_button', align='cm', minw=0.6,
                 minh=0.8, padding=0.03, r=0.08, colour=G.C.RED,
                 hover=true, button='run_info', shadow=true,
                 focus_args={button=G.F_GUIDE and 'guide' or 'back', orientation='bm'}}, nodes={
                 label('i', 0.52)
             }},
             gap(0.06),
-            {n=G.UIT.C, config={id='options_button', align='cm', minw=0.48,
+            {n=G.UIT.C, config={id='options_button', align='cm', minw=0.6,
                 minh=0.8, padding=0.03, r=0.08, colour=G.C.ORANGE,
                 hover=true, button='options', shadow=true,
                 focus_args={button='start', orientation='bm'}}, nodes={
@@ -856,12 +867,17 @@ function create_UIBox_HUD()
         }}
     }}
 
-    return {n=G.UIT.ROOT, config={align='cm', padding=0.06, minw=ROOM_W-SAFE_MARGIN*2,
-        colour=G.C.CLEAR}, nodes={
-        {n=G.UIT.R, config={id='row_round', align='cm', padding=0.06,
-            r=0.1, colour=G.C.CLEAR}, nodes={
-            blind_slot, gap(0.1), score, gap(0.1),
-            current_hand, gap(0.1), meta
+    -- A horizontal take on the desktop's sidebar: a translucent full-width band,
+    -- a MAIN-coloured rim and a dark panel holding the boxes.
+    return {n=G.UIT.ROOT, config={align='cm', padding=0.05, minw=ROOM_W,
+        colour=G.C.UI.TRANSPARENT_DARK}, nodes={
+        {n=G.UIT.R, config={align='cm', padding=0.05, r=0.1,
+            colour=G.C.DYN_UI.MAIN}, nodes={
+            {n=G.UIT.R, config={id='row_round', align='cm', padding=0.06,
+                r=0.1, colour=G.C.DYN_UI.BOSS_DARK}, nodes={
+                blind_slot, gap(0.1), score, gap(0.1),
+                current_hand, gap(0.1), meta
+            }}
         }}
     }}
 end
@@ -919,6 +935,21 @@ G.FUNCS.small_screen_blind_target = function(e)
     if e.small_screen_target_text == text then return end
     e.small_screen_target_text = text
     e.config.object:set_text(text)
+end
+
+-- Desktop flames are a 2.5x2.5 sprite on a 2x1 box. Keep that width ratio but
+-- cap the height so fire stays inside the HUD band instead of covering the
+-- hand name and running off the top of the screen.
+local original_flame_handler = G.FUNCS.flame_handler
+G.FUNCS.flame_handler = function(e)
+    original_flame_handler(e)
+    local flame, box = e.config.object, e.parent
+    if flame and flame.is and flame:is(Sprite) and box and
+       flame.small_screen_box_w ~= box.T.w then
+        flame.small_screen_box_w = box.T.w
+        flame.T.w, flame.T.h = 1.25*box.T.w, 1.7*box.T.h
+        flame.VT.w, flame.VT.h = flame.T.w, flame.T.h
+    end
 end
 
 local original_chip_UI_set = G.FUNCS.chip_UI_set
@@ -981,7 +1012,7 @@ function Game:start_run(...)
     end
     if self.HUD then
         self.HUD:set_alignment({major=G.ROOM_ATTACH, type='tmi',
-            offset={x=0, y=SAFE_MARGIN}, bond='Strong'})
+            offset={x=0, y=0}, bond='Strong'})
         self.HUD:align_to_major()
         self.HUD:recalculate()
     end
