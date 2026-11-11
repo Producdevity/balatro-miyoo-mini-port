@@ -1070,14 +1070,14 @@ local function shop_pin()
     return shop_pin_x, shop_pin_y
 end
 
--- Settled boxes skip movement here, so changing the offset alone leaves the
--- shop drawn in place; snap it below the screen. Keeps offset.py for the
+-- Settled UI elements keep their cached draw positions here, so moving the
+-- shop's root leaves its panels drawn in place. Hide the whole box instead
+-- (its card areas are children, so they hide too). Keeps offset.py for the
 -- game's own restore.
 local function hide_shop()
-    if not G.shop or G.shop.alignment.offset.y == ROOM_H + 5 then return end
+    if not G.shop then return end
+    G.shop.states.visible = false
     G.shop.alignment.offset.y = ROOM_H + 5
-    G.shop:align_to_major()
-    G.shop:hard_set_VT()
 end
 
 local original_update_shop = Game.update_shop
@@ -1087,6 +1087,7 @@ function Game:update_shop(dt)
     if G.shop and G.shop.alignment.offset.py then
         hide_shop()
     elseif G.shop then
+        G.shop.states.visible = true
         local x, y = shop_pin()
         pin_run_overlay(G.shop, y, x)
         if shop_needs_relayout then

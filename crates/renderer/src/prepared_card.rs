@@ -2,13 +2,17 @@ use crate::card_effects::{CardShaderInputs, ShaderPre};
 use crate::pixel_buffer::{apply_card_shader, PixelBuffer, StencilCompare};
 use crate::shader_colour_cache::ColourCache;
 
+type Shade = Box<dyn FnOnce() -> (Vec<u8>, Vec<u8>) + Send>;
+
 /// A fixed card effect evaluated at source texels, before nearest-neighbor drawing.
 pub struct PreparedCard {
     origin: [u32; 2],
     region: [u32; 2],
     stride: u32,
-    pixels: Vec<u8>,
-    coverage: Vec<u8>,
+    /// Shaded pixels and coverage bits. Edition cards fill these on first draw,
+    /// so the work runs on the raster thread rather than the game thread.
+    texels: std::sync::OnceLock<(Vec<u8>, Vec<u8>)>,
+    pending: std::sync::Mutex<Option<Shade>>,
 }
 
 impl PreparedCard {
@@ -82,13 +86,97 @@ impl PreparedCard {
             origin: [x, y],
             region: [width, height],
             stride,
-            pixels,
-            coverage,
+            texels: std::sync::OnceLock::from((pixels, coverage)),
+            pending: std::sync::Mutex::new(None),
+        })
+    }
+
+    /// An edition effect (foil, holo, polychrome) evaluated once at source texels
+    /// for fixed shader inputs, so later draws reuse it as a plain sprite.
+    pub fn shaded(
+        source: &[u8],
+        source_width: u32,
+        region: [u32; 4],
+        params: crate::pixel_buffer::DissolveParams,
+    ) -> Option<Self> {
+        if !matches!(params.shader_effect, 3 | 4 | 5) || source_width == 0 {
+            return None;
+        }
+        let source_height = u32::try_from(
+            source
+                .len()
+                .checked_div((source_width as usize).checked_mul(4)?)?,
+        )
+        .ok()?;
+        let [x, y, width, height] = region;
+        if width == 0 || height == 0 || width > 256 || height > 256 {
+            return None;
+        }
+        if x.checked_add(width)? > source_width || y.checked_add(height)? > source_height {
+            return None;
+        }
+        // Copy the region now; shade it at 1:1 into a transparent buffer through
+        // the normal shader path on first draw, then undo the premultiplication
+        // that blending onto transparency applied.
+        let mut texels = Vec::with_capacity((width * height * 4) as usize);
+        for row in y..y + height {
+            let start = (row as usize * source_width as usize + x as usize) * 4;
+            texels.extend_from_slice(&source[start..start + width as usize * 4]);
+        }
+        let shade: Shade = Box::new(move || {
+            let mut buffer = PixelBuffer::new(width, height);
+            buffer.draw_image_region(
+                &texels,
+                width,
+                height,
+                0.0,
+                0.0,
+                width as f32,
+                height as f32,
+                0.0,
+                0.0,
+                1.0,
+                1.0,
+                [255; 4],
+                false,
+                false,
+                params,
+            );
+            let mut pixels = buffer.pixels;
+            let mut coverage = vec![0; (pixels.len() / 4).div_ceil(8)];
+            for (n, pixel) in pixels.chunks_exact_mut(4).enumerate() {
+                let alpha = pixel[3] as u32;
+                if alpha == 0 {
+                    continue;
+                }
+                coverage[n / 8] |= 1 << (n % 8);
+                if alpha < 255 {
+                    for channel in &mut pixel[..3] {
+                        *channel = ((*channel as u32 * 255 + alpha / 2) / alpha).min(255) as u8;
+                    }
+                }
+            }
+            (pixels, coverage)
+        });
+        Some(Self {
+            origin: [x, y],
+            region: [width, height],
+            stride: width,
+            texels: std::sync::OnceLock::new(),
+            pending: std::sync::Mutex::new(Some(shade)),
+        })
+    }
+
+    fn texels(&self) -> &(Vec<u8>, Vec<u8>) {
+        self.texels.get_or_init(|| {
+            let shade = self.pending.lock().unwrap().take();
+            shade.map(|shade| shade()).unwrap_or_default()
         })
     }
 
     pub fn bytes(&self) -> usize {
-        self.pixels.len() + self.coverage.len()
+        let texels = (self.stride * self.region[1]) as usize;
+        texels * 4 + texels.div_ceil(8)
     }
 
     pub fn draw(
@@ -114,7 +202,7 @@ impl PreparedCard {
         if !replace
             && crate::neon_sprite::draw_prepared(
                 target,
-                &self.pixels,
+                &self.texels().0,
                 self.stride,
                 self.origin,
                 self.region,
@@ -134,6 +222,7 @@ impl PreparedCard {
         inverse: [f32; 6],
         replace: bool,
     ) {
+        let (pixels, coverage) = self.texels();
         let [a, b, tx, c, d, ty] = inverse;
         for y in y0..y1 {
             let yf = y as f32 + 0.5;
@@ -151,8 +240,8 @@ impl PreparedCard {
                 let row = (self.origin[1] as f32 + v) as u32 - self.origin[1];
                 let n = row as usize * self.stride as usize + column as usize;
                 if column >= self.stride
-                    || n >= self.pixels.len() / 4
-                    || self.coverage[n / 8] & (1 << (n % 8)) == 0
+                    || n >= pixels.len() / 4
+                    || coverage[n / 8] & (1 << (n % 8)) == 0
                 {
                     continue;
                 }
@@ -162,7 +251,7 @@ impl PreparedCard {
                     continue;
                 }
                 let di = (y as usize * target.width as usize + x as usize) * 4;
-                let [r, g, b, alpha] = self.pixels[n * 4..n * 4 + 4].try_into().unwrap();
+                let [r, g, b, alpha] = pixels[n * 4..n * 4 + 4].try_into().unwrap();
                 if replace || ((target.blend == 0 || target.blend == 4) && alpha == 255) {
                     target.pixels[di..di + 4].copy_from_slice(&[r, g, b, alpha]);
                 } else if alpha != 0 {
@@ -219,7 +308,7 @@ mod tests {
             prepared.draw_scalar(&mut expected, bounds, inverse, false);
             assert!(crate::neon_sprite::draw_prepared(
                 &mut actual,
-                &prepared.pixels,
+                &prepared.texels().0,
                 prepared.stride,
                 prepared.origin,
                 prepared.region,

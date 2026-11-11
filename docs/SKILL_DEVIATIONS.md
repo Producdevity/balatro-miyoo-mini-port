@@ -96,3 +96,20 @@ user's saves alone. Framebuffer screenshots: `cat /dev/fb0`, visible page from
   ~13 fps; normal scoring dips come from the game's particles and popups.
 - Flames use a square sprite sized from the box, as desktop does.
 - Skill updated to 1.4.0 with these findings.
+
+## Round 5
+
+- The shop counter still showed behind packs on the device: the static UI draw
+  cache keeps settled elements at their cached positions, so moving the shop's
+  root did nothing. The shop box is now hidden (`states.visible`) while a pack
+  or used card is up. Checked on the Mini's framebuffer, then pressed Y on the
+  device (injected evdev) to skip and saw the shop return.
+- Card-effect cost on the Mini (`bench-card-effects`, one 107x142 card, ms):
+  plain 0.5, played 7.1, debuff 6.8, foil 6.1, holo 11.1, polychrome 10.5,
+  negative 6.3, voucher 7.8, booster 8.1, hologram 2.0, negative shine 9.1,
+  gold seal 5.5.
+- Foil, holo and polychrome are now shaded once per card region in texture
+  space with inputs quantized to 0.2 s (phase 0.05), on the raster thread on
+  first use, and reused as plain sprites (`BALATRO_EDITION_CACHE=0` restores
+  per-frame shading). All-edition stress hand: ~13 fps -> 16-20 fps. Shading on
+  the game thread instead moved the cost there (lua 20 -> 44 ms).

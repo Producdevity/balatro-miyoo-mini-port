@@ -11,7 +11,7 @@ return function(frame)
         phase, wait = 1, frame + 90
     elseif phase == 1 and frame > wait then
         assert(G.STATE ~= G.STATES.SHOP, 'pack did not open')
-        assert(G.shop.VT.y > G.ROOM.T.h, 'shop panel stayed on screen behind the pack')
+        assert(not G.shop.states.visible, 'shop panel stayed visible behind the pack')
         io.stderr:write('[controls-test] PASS: shop hidden while a pack is open\n')
         phase = 2
         return 'pack-open'

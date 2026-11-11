@@ -449,12 +449,20 @@ pub(super) fn register(
                             color,
                             *s.default_filter_linear.lock(),
                         ) {
-                            s.card_cache.lock().get(
-                                &image,
-                                [src_x, src_y, src_w, src_h],
-                                dp.shader_effect,
-                                dp.shader_inputs.clock != 0.0,
-                            )
+                            if matches!(dp.shader_effect, 3 | 4 | 5) {
+                                s.card_cache.lock().get_shaded(
+                                    &image,
+                                    [src_x, src_y, src_w, src_h],
+                                    dp,
+                                )
+                            } else {
+                                s.card_cache.lock().get(
+                                    &image,
+                                    [src_x, src_y, src_w, src_h],
+                                    dp.shader_effect,
+                                    dp.shader_inputs.clock != 0.0,
+                                )
+                            }
                         } else {
                             None
                         };
