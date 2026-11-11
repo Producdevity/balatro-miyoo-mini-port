@@ -7,12 +7,26 @@ impl PixelBuffer {
     /// Colours are [centre, light, dark]; parameters are [time, spin_time, spin_amount, contrast].
     pub fn fill_procedural_background(
         &mut self,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        colours: &[[f32; 4]; 3],
+        bg_params: [f32; 4],
+    ) {
+        self.fill_procedural_background_cells(x, y, w, h, colours, bg_params, 8);
+    }
+
+    /// As above, sampling the field every `cell` pixels.
+    pub fn fill_procedural_background_cells(
+        &mut self,
         _x: i32,
         _y: i32,
         _w: i32,
         _h: i32,
         colours: &[[f32; 4]; 3],
         bg_params: [f32; 4],
+        cell: usize,
     ) {
         let trig = TrigLookup::new();
         let fast_sin = |x| trig.sin(x);
@@ -47,8 +61,8 @@ impl PixelBuffer {
         let contrast_mod = 0.25 * contrast + 0.5 * spin_amount + 1.2;
 
         // Sample the field at roughly eight-pixel intervals.
-        let gw = (bw / 8).max(30).min(120);
-        let gh = (bh / 8).max(20).min(90);
+        let gw = (bw / cell).max(30).min(120);
+        let gh = (bh / cell).max(20).min(90);
         let row_bytes = bw * 4;
 
         // Compute paint value at each grid point → (r, g, b)

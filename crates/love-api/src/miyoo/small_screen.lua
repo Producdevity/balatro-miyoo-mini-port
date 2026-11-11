@@ -236,14 +236,22 @@ end
 
 local original_cardarea_draw = CardArea.draw
 function CardArea:draw(...)
+    -- Hand, Joker and consumable areas keep the desktop's translucent plates
+    -- and card counts; other plates stay hidden in this layout.
     local result = original_cardarea_draw(self, ...)
     local box = self.children.area_uibox
-    -- The hand keeps the desktop's translucent plate and card count.
-    if box and self ~= G.hand and not box.small_screen_plate_hidden then
-        box.small_screen_plate_hidden = true
-        if self == G.jokers or self == G.consumeables then
-            box.states.visible = false
+    if box and self == G.hand and not box.small_screen_hand_padding then
+        box.small_screen_hand_padding = true
+        local plate = box.UIRoot and box.UIRoot.children and box.UIRoot.children[1]
+        if plate then
+            plate.config.minw = self.T.w + 0.3
+            plate.config.minh = self.T.h + 0.05
+            box:recalculate()
         end
+    end
+    if box and not box.small_screen_plate_hidden and
+       self ~= G.hand and self ~= G.jokers and self ~= G.consumeables then
+        box.small_screen_plate_hidden = true
         local plate = box.UIRoot and box.UIRoot.children and box.UIRoot.children[1]
         if plate and plate.config and plate.config.colour then
             plate.states.visible = false
@@ -937,9 +945,9 @@ G.FUNCS.small_screen_blind_target = function(e)
     e.config.object:set_text(text)
 end
 
--- Desktop flames are a 2.5x2.5 sprite on a 2x1 box. Keep that width ratio but
--- cap the height so fire stays inside the HUD band instead of covering the
--- hand name and running off the top of the screen.
+-- Desktop flames are a square 2.5x2.5 sprite on a 2x1 box. Keep the sprite
+-- square so the fire keeps its shape, but size it from the smaller box so it
+-- stays inside the HUD band instead of running off the top of the screen.
 local original_flame_handler = G.FUNCS.flame_handler
 G.FUNCS.flame_handler = function(e)
     original_flame_handler(e)
@@ -947,7 +955,7 @@ G.FUNCS.flame_handler = function(e)
     if flame and flame.is and flame:is(Sprite) and box and
        flame.small_screen_box_w ~= box.T.w then
         flame.small_screen_box_w = box.T.w
-        flame.T.w, flame.T.h = 1.25*box.T.w, 1.7*box.T.h
+        flame.T.w, flame.T.h = 1.15*box.T.w, 1.15*box.T.w
         flame.VT.w, flame.VT.h = flame.T.w, flame.T.h
     end
 end
@@ -1062,10 +1070,23 @@ local function shop_pin()
     return shop_pin_x, shop_pin_y
 end
 
+-- Settled boxes skip movement here, so changing the offset alone leaves the
+-- shop drawn in place; snap it below the screen. Keeps offset.py for the
+-- game's own restore.
+local function hide_shop()
+    if not G.shop or G.shop.alignment.offset.y == ROOM_H + 5 then return end
+    G.shop.alignment.offset.y = ROOM_H + 5
+    G.shop:align_to_major()
+    G.shop:hard_set_VT()
+end
+
 local original_update_shop = Game.update_shop
 function Game:update_shop(dt)
     local result = original_update_shop(self, dt)
-    if G.shop then
+    -- offset.py marks the shop as moved away while a card is being used.
+    if G.shop and G.shop.alignment.offset.py then
+        hide_shop()
+    elseif G.shop then
         local x, y = shop_pin()
         pin_run_overlay(G.shop, y, x)
         if shop_needs_relayout then
@@ -1075,6 +1096,13 @@ function Game:update_shop(dt)
             pin_run_overlay(G.shop, y, x)
         end
     end
+    return result
+end
+
+local original_use_card = G.FUNCS.use_card
+G.FUNCS.use_card = function(...)
+    local result = original_use_card(...)
+    if G.shop and G.shop.alignment.offset.py then hide_shop() end
     return result
 end
 
@@ -1091,6 +1119,9 @@ for _, pack in ipairs({'arcana', 'spectral', 'standard', 'buffoon', 'celestial'}
     Game[name] = function(self, dt)
         local result = original(self, dt)
         centre_on_room(G.booster_pack)
+        -- Desktop lowers the shop by ROOM.T.y+11, which is still on screen in
+        -- this shorter room; move it fully below the screen while a pack is open.
+        hide_shop()
         return result
     end
 end
@@ -1107,6 +1138,14 @@ function Game:update_selecting_hand(dt)
         buttons:hard_set_VT()
     end
     centre_on_room(G.deck_preview)
+    -- "Hand will not score" sits over the Jokers in this layout; give it a
+    -- translucent dark plate so it stays readable.
+    local warning = self.boss_warning_text
+    if warning and warning.UIRoot and not warning.small_screen_plate then
+        warning.small_screen_plate = true
+        warning.UIRoot.config.colour = {0, 0, 0, 0.7}
+        warning.UIRoot.config.r = 0.15
+    end
     return result
 end
 

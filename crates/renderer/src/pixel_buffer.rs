@@ -618,6 +618,25 @@ impl PixelBuffer {
     }
 
     /// Draw a filled axis-aligned rectangle
+    /// Overwrite this buffer with `source` scaled up 2x (each pixel to a 2x2 block).
+    pub fn copy_scaled_2x_from(&mut self, source: &PixelBuffer) {
+        let width = self.width as usize;
+        let src_w = source.width as usize;
+        if width == 0 || src_w * 2 != width || source.height as usize * 2 != self.height as usize {
+            return;
+        }
+        let row_bytes = width * 4;
+        for (sy, src_row) in source.pixels.chunks_exact(src_w * 4).enumerate() {
+            let start = sy * 2 * row_bytes;
+            let row = &mut self.pixels[start..start + row_bytes];
+            for (pair, pixel) in row.chunks_exact_mut(8).zip(src_row.chunks_exact(4)) {
+                pair[..4].copy_from_slice(pixel);
+                pair[4..].copy_from_slice(pixel);
+            }
+            self.pixels.copy_within(start..start + row_bytes, start + row_bytes);
+        }
+    }
+
     pub fn fill_rect(&mut self, x: i32, y: i32, w: i32, h: i32, color: [u8; 4]) {
         let (clip_x0, clip_y0, clip_x1, clip_y1) = self.clip_bounds();
         let x0 = x.max(clip_x0);

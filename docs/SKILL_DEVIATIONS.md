@@ -80,3 +80,19 @@ user's saves alone. Framebuffer screenshots: `cat /dev/fb0`, visible page from
 - Reported lost second D-pad tap before A: not reproduced. `tap-select`
   replays seven tap patterns, also injected as raw evdev records on the Mini
   (`BALATRO_TAP_EVDEV=/dev/input/event0`); all pass.
+
+## Round 4
+
+- Shop hides fully while a pack is open or a card is used: the port pinned the
+  shop every frame and settled boxes skip movement, so the game's own offset
+  change never took effect. Replay: `pack-open`.
+- Button glyphs recoloured at load to the Mini's SNES colours.
+- The Psychic's "Hand will not score" warning has a dark plate. Replay:
+  `boss-warning`.
+- Joker and consumable plates and counts restored; hand plate slightly larger.
+- Raster-thread SIGPROF profile on the Mini (`native-sampler` feature) showed
+  the background redraw at ~10% of raster time; it is now drawn at half
+  resolution. Stress hands (all eight cards with editions) stay raster-bound at
+  ~13 fps; normal scoring dips come from the game's particles and popups.
+- Flames use a square sprite sized from the box, as desktop does.
+- Skill updated to 1.4.0 with these findings.

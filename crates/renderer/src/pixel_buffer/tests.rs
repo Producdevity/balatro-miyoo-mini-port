@@ -447,3 +447,14 @@ fn procedural_background_fills_every_pixel_smoothly() {
         }
     }
 }
+
+#[test]
+fn copy_scaled_2x_duplicates_each_pixel_into_a_block() {
+    let mut source = PixelBuffer::new(2, 1);
+    source.pixels.copy_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8]);
+    let mut target = PixelBuffer::new(4, 2);
+    target.copy_scaled_2x_from(&source);
+    let row = [1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 5, 6, 7, 8];
+    assert_eq!(&target.pixels[..16], &row);
+    assert_eq!(&target.pixels[16..], &row);
+}

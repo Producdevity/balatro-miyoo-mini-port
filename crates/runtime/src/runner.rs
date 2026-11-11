@@ -746,6 +746,8 @@ fn run_frame_loop<B: Backend>(
             Ok("long-run") => Some(include_str!("replays/long_run.lua")),
             Ok("tap-select" | "tap-select-slow") => Some(include_str!("replays/tap_select.lua")),
             Ok("splash-skip") => Some(include_str!("replays/splash_skip.lua")),
+            Ok("pack-open") => Some(include_str!("replays/pack_open.lua")),
+            Ok("boss-warning") => Some(include_str!("replays/boss_warning.lua")),
             _ => None,
         };
         script

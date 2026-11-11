@@ -396,20 +396,36 @@ pub(super) fn register(
                         let draw = move |pb: &mut PixelBuffer| {
                             if cached_background {
                                 let mut cache = cache.lock();
-                                if cache.needs_refresh(pb.width, pb.height, &colours) {
-                                    if cache.buffer.width != pb.width
-                                        || cache.buffer.height != pb.height
-                                    {
-                                        cache.buffer.resize(pb.width, pb.height);
+                                // Even-sized frames keep a half-resolution swirl and
+                                // scale it up per frame: a quarter of the redraw cost.
+                                let half = pb.width % 2 == 0 && pb.height % 2 == 0;
+                                let (cw, ch) = if half {
+                                    (pb.width / 2, pb.height / 2)
+                                } else {
+                                    (pb.width, pb.height)
+                                };
+                                if cache.needs_refresh(cw, ch, &colours) {
+                                    if cache.buffer.width != cw || cache.buffer.height != ch {
+                                        cache.buffer.resize(cw, ch);
                                     }
-                                    cache.buffer.fill_procedural_background(
-                                        tx as i32, ty as i32, dst_w, dst_h, &colours, bg_params,
+                                    cache.buffer.fill_procedural_background_cells(
+                                        tx as i32,
+                                        ty as i32,
+                                        dst_w,
+                                        dst_h,
+                                        &colours,
+                                        bg_params,
+                                        if half { 4 } else { 8 },
                                     );
                                     cache.colours = colours;
                                     cache.valid = true;
                                     cache.refreshed_at = Some(std::time::Instant::now());
                                 }
-                                pb.pixels.copy_from_slice(&cache.buffer.pixels);
+                                if half {
+                                    pb.copy_scaled_2x_from(&cache.buffer);
+                                } else {
+                                    pb.pixels.copy_from_slice(&cache.buffer.pixels);
+                                }
                             } else {
                                 pb.fill_procedural_background(
                                     tx as i32, ty as i32, dst_w, dst_h, &colours, bg_params,
