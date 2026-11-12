@@ -42,14 +42,10 @@ impl FontCache {
     }
 
     pub fn release_idle(&mut self) {
-        if self
-            .large
-            .as_ref()
-            .is_some_and(|cached| {
-                cached.bytes > RESIDENT_FONT_MAX_BYTES
-                    && cached.last_used.elapsed() >= LARGE_FONT_IDLE_TIME
-            })
-        {
+        if self.large.as_ref().is_some_and(|cached| {
+            cached.bytes > RESIDENT_FONT_MAX_BYTES
+                && cached.last_used.elapsed() >= LARGE_FONT_IDLE_TIME
+        }) {
             self.large = None;
         }
     }

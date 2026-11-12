@@ -99,6 +99,9 @@ love.keyreleased = function(key, scancode)
     end
 end
 
+-- Last wall-clock time each held direction was advanced; see wall_clock_hold.
+local hold_clock = {}
+
 local function dispatch(controller, dt)
     -- Run at the controller's input phase, after lock checks and before hover
     -- updates. Navigation can advance twice without drawing an intermediate frame.
@@ -138,6 +141,7 @@ local function dispatch(controller, dt)
             pressed, navigation = true, direction
         else
             held[button] = nil
+            hold_clock[button] = nil
             love.gamepadreleased(gamepad, button)
             local mapped = G.button_mapping and G.button_mapping[button] or button
             controller.released_buttons[mapped] = nil
@@ -151,7 +155,6 @@ end
 -- which it caps at 0.1 s. At handheld frame rates that makes repeats several
 -- times slower than desktop. Feed held directions wall-clock time instead and
 -- keep the remainder that the game's reset to zero would discard.
-local hold_clock = {}
 local function wall_clock_hold(controller)
     if controller.miyoo_wall_hold then return end
     controller.miyoo_wall_hold = true

@@ -118,7 +118,11 @@ impl CardCache {
         inputs.clock = quantize(inputs.clock, 0.2);
         inputs.seed = quantize(inputs.seed, 0.2);
         inputs.phase = quantize(inputs.phase, 0.05);
-        let key = [inputs.phase.to_bits(), inputs.clock.to_bits(), inputs.seed.to_bits()];
+        let key = [
+            inputs.phase.to_bits(),
+            inputs.clock.to_bits(),
+            inputs.seed.to_bits(),
+        ];
         let effect = params.shader_effect;
         if let Some(index) = self.entries.iter().position(|entry| {
             entry.source.as_ptr() == Arc::as_ptr(source)
@@ -131,8 +135,19 @@ impl CardCache {
             self.entries.push_back(entry);
             return Some(card);
         }
-        let [_, _, w, h] = region;
-        let needed = (w * h) as usize * 4 + ((w * h) as usize).div_ceil(8);
+        let [x, y, w, h] = region;
+        // Reject bad regions before sizing or evicting anything.
+        if w == 0
+            || h == 0
+            || w > 256
+            || h > 256
+            || x.saturating_add(w) > source.width
+            || (y as usize + h as usize) * source.width as usize * 4 > source.pixels.len()
+        {
+            return None;
+        }
+        let texels = w as usize * h as usize;
+        let needed = texels * 4 + texels.div_ceil(8);
         while self.bytes + needed > LIMIT || self.entries.len() >= MAX_ENTRIES {
             let index = self
                 .entries
@@ -140,7 +155,12 @@ impl CardCache {
                 .position(|entry| Arc::strong_count(&entry.card) == 1)?;
             self.bytes -= self.entries.remove(index)?.card.bytes();
         }
-        let card = Arc::new(PreparedCard::shaded(&source.pixels, source.width, region, params)?);
+        let card = Arc::new(PreparedCard::shaded(
+            &source.pixels,
+            source.width,
+            region,
+            params,
+        )?);
         self.bytes += card.bytes();
         self.entries.push_back(Entry {
             source: Arc::downgrade(source),
@@ -205,7 +225,10 @@ mod tests {
                 None => break,
             }
         }
-        assert!(!held.is_empty() && cache.bytes <= LIMIT, "held draws were evicted");
+        assert!(
+            !held.is_empty() && cache.bytes <= LIMIT,
+            "held draws were evicted"
+        );
         assert!(cache
             .get(&source, [100.0, 0.0, 256.0, 256.0], 1, false)
             .is_none());
@@ -237,7 +260,10 @@ mod tests {
         let b = cache.get_shaded(&source, region, params(10.15)).unwrap();
         let c = cache.get_shaded(&source, region, params(10.25)).unwrap();
         assert!(Arc::ptr_eq(&a, &b), "same fifth of a second was reshaded");
-        assert!(!Arc::ptr_eq(&a, &c), "next fifth of a second reused stale shading");
+        assert!(
+            !Arc::ptr_eq(&a, &c),
+            "next fifth of a second reused stale shading"
+        );
     }
 
     #[test]

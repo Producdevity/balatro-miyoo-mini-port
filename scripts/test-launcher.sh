@@ -11,6 +11,7 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+unset BALATRO_CPU_MHZ
 export CLOCK_TEST_ROOT="$WORK"
 export BALATRO_SYSTEM_DIR="$WORK/system"
 export BALATRO_SAVE_DIR="$WORK/saves"

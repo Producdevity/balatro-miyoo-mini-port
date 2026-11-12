@@ -432,16 +432,35 @@ fn white_text_mask_fast_path_matches_generic_tinting() {
 
 #[test]
 fn procedural_background_fills_every_pixel_smoothly() {
-    let colours = [[0.2, 0.5, 0.3, 1.0], [0.9, 0.8, 0.2, 1.0], [0.05, 0.1, 0.4, 1.0]];
+    let colours = [
+        [0.2, 0.5, 0.3, 1.0],
+        [0.9, 0.8, 0.2, 1.0],
+        [0.05, 0.1, 0.4, 1.0],
+    ];
     for (w, h) in [(640, 480), (641, 479), (320, 240)] {
         let mut buffer = PixelBuffer::new(w, h);
         buffer.pixels.fill(0);
         buffer.fill_procedural_background(0, 0, w as i32, h as i32, &colours, [3.0, 1.0, 0.5, 2.0]);
-        assert!(buffer.pixels.chunks_exact(4).all(|p| p[3] == 255), "{w}x{h} left a pixel unfilled");
-        for row in buffer.pixels.chunks_exact(w as usize * 4) {
+        assert!(
+            buffer.pixels.chunks_exact(4).all(|p| p[3] == 255),
+            "{w}x{h} left a pixel unfilled"
+        );
+        let row_bytes = w as usize * 4;
+        for (a, b) in buffer.pixels.iter().zip(&buffer.pixels[row_bytes..]) {
+            assert!(
+                (*a as i32 - *b as i32).abs() <= 40,
+                "{w}x{h} vertical jump {a} {b}"
+            );
+        }
+        for row in buffer.pixels.chunks_exact(row_bytes) {
             for pair in row.windows(8).step_by(4) {
                 for c in 0..3 {
-                    assert!((pair[c] as i32 - pair[4 + c] as i32).abs() <= 40, "{w}x{h} jumps {} {}", pair[c], pair[4 + c]);
+                    assert!(
+                        (pair[c] as i32 - pair[4 + c] as i32).abs() <= 40,
+                        "{w}x{h} jumps {} {}",
+                        pair[c],
+                        pair[4 + c]
+                    );
                 }
             }
         }

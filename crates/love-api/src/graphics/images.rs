@@ -44,9 +44,10 @@ pub(super) fn register(lua: &Lua, g: &LuaTable, state: &Arc<SharedState>) -> Lua
                     return new_image_stub(lua, 1, 1);
                 };
                 let decoded = match image::load_from_memory(&data) {
-                    Ok(image) if path.ends_with("/gamepad_ui.png")
-                        && std::env::var_os("BALATRO_PLATFORM").as_deref()
-                            == Some(std::ffi::OsStr::new("miyoo")) =>
+                    Ok(image)
+                        if path.ends_with("/gamepad_ui.png")
+                            && std::env::var_os("BALATRO_PLATFORM").as_deref()
+                                == Some(std::ffi::OsStr::new("miyoo")) =>
                     {
                         let mut rgba = image.to_rgba8();
                         recolor_miyoo_face_buttons(&mut rgba);
@@ -426,7 +427,8 @@ fn recolor_miyoo_face_buttons(image: &mut image::RgbaImage) {
         let [r, g, b, a] = p.0;
         a > 0 && r.max(g).max(b) - r.min(g).min(b) > 40
     };
-    let luma = |p: &image::Rgba<u8>| p.0[0] as u32 * 299 + p.0[1] as u32 * 587 + p.0[2] as u32 * 114;
+    let luma =
+        |p: &image::Rgba<u8>| p.0[0] as u32 * 299 + p.0[1] as u32 * 587 + p.0[2] as u32 * 114;
     let palette = |column: u32| {
         let mut colours: Vec<image::Rgba<u8>> = Vec::new();
         for y in 0..tile {
@@ -451,8 +453,16 @@ fn recolor_miyoo_face_buttons(image: &mut image::RgbaImage) {
             for x in column * tile..(column + 1) * tile {
                 let p = *source.get_pixel(x, y);
                 if let Some(rank) = from.iter().position(|c| *c == p) {
-                    let target = to[rank * (to.len() - 1) / (from.len() - 1).max(1)];
-                    image.put_pixel(x, y, image::Rgba([target.0[0], target.0[1], target.0[2], p.0[3]]));
+                    let target = if from.len() == 1 {
+                        to[to.len() / 2]
+                    } else {
+                        to[rank * (to.len() - 1) / (from.len() - 1)]
+                    };
+                    image.put_pixel(
+                        x,
+                        y,
+                        image::Rgba([target.0[0], target.0[1], target.0[2], p.0[3]]),
+                    );
                 }
             }
         }

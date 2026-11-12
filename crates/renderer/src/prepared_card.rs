@@ -9,6 +9,8 @@ pub struct PreparedCard {
     origin: [u32; 2],
     region: [u32; 2],
     stride: u32,
+    /// Allocated texels, including any atlas-edge row and column.
+    texel_count: usize,
     /// Shaded pixels and coverage bits. Edition cards fill these on first draw,
     /// so the work runs on the raster thread rather than the game thread.
     texels: std::sync::OnceLock<(Vec<u8>, Vec<u8>)>,
@@ -86,6 +88,7 @@ impl PreparedCard {
             origin: [x, y],
             region: [width, height],
             stride,
+            texel_count: count,
             texels: std::sync::OnceLock::from((pixels, coverage)),
             pending: std::sync::Mutex::new(None),
         })
@@ -162,6 +165,7 @@ impl PreparedCard {
             origin: [x, y],
             region: [width, height],
             stride: width,
+            texel_count: (width * height) as usize,
             texels: std::sync::OnceLock::new(),
             pending: std::sync::Mutex::new(Some(shade)),
         })
@@ -175,8 +179,7 @@ impl PreparedCard {
     }
 
     pub fn bytes(&self) -> usize {
-        let texels = (self.stride * self.region[1]) as usize;
-        texels * 4 + texels.div_ceil(8)
+        self.texel_count * 4 + self.texel_count.div_ceil(8)
     }
 
     pub fn draw(

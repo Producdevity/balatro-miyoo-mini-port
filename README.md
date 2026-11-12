@@ -26,9 +26,11 @@ The launcher keeps the stock CPU clock. To overclock, set `BALATRO_CPU_MHZ`
 (1200-1600) in `script.sh`; it uses Onion's clock helper and restores the
 previous clock on exit.
 
-Look settings can be set in `script.sh`: `BALATRO_SCANLINES` (0-100, default
-18), `BALATRO_BACKGROUND_MS` (background animation period, 0 for static) and
-`BALATRO_FONT=nunito` for the previous rounded font.
+Look settings are exported near the end of `script.sh`; edit their defaults
+there. `BALATRO_SCANLINES` (0-100, default 18) darkens alternate rows,
+`BALATRO_BACKGROUND_MS` sets the background animation period (0 for static),
+`BALATRO_EDITION_CACHE=0` reshades foil, holo and polychrome every frame, and
+`BALATRO_FONT=nunito` selects the previous rounded font.
 
 ## Reporting problems
 

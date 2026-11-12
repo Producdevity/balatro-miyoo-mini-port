@@ -709,7 +709,9 @@ pub(super) fn draw_region_to_buf(
             static VERIFY: LazyLock<bool> =
                 LazyLock::new(|| std::env::var("BALATRO_VERIFY_RASTER").as_deref() == Ok("1"));
             static CHECKS: AtomicU64 = AtomicU64::new(0);
-            let reference = VERIFY.then(|| {
+            // Edition cards are shaded with quantized inputs, so they cannot match
+            // a reference drawn from the exact inputs.
+            let reference = (*VERIFY && !matches!(dp.shader_effect, 3 | 4 | 5)).then(|| {
                 let mut reference = PixelBuffer::new(pb.width, pb.height);
                 reference.copy_raster_source(pb);
                 reference.draw_image_region_transformed(
@@ -780,23 +782,40 @@ pub(super) fn draw_region_to_buf(
             profiled_pixels = dst_w.saturating_mul(dst_h);
             AXIS_DRAW_PIXELS.fetch_add(profiled_pixels, Ordering::Relaxed);
         }
-        pb.draw_image_region(
-            src_pixels,
-            src_w,
-            src_h,
-            src_x,
-            src_y,
-            src_rw,
-            src_rh,
-            dst_x,
-            dst_y,
-            final_sx,
-            final_sy,
-            color,
-            replace,
-            source_white_mask,
-            dp,
-        );
+        let edition = prepared.filter(|_| {
+            matches!(dp.shader_effect, 3 | 4 | 5) && !pb.filter_linear && !pb.stencil_write_mode
+        });
+        if let (Some(prepared), Some(inv)) = (edition, composite.inverse()) {
+            prepared.draw(
+                pb,
+                [
+                    dst_x.floor() as i32,
+                    dst_y.floor() as i32,
+                    (dst_x + src_rw * final_sx).ceil() as i32,
+                    (dst_y + src_rh * final_sy).ceil() as i32,
+                ],
+                [inv.a, inv.b, inv.tx, inv.c, inv.d, inv.ty],
+                replace,
+            );
+        } else {
+            pb.draw_image_region(
+                src_pixels,
+                src_w,
+                src_h,
+                src_x,
+                src_y,
+                src_rw,
+                src_rh,
+                dst_x,
+                dst_y,
+                final_sx,
+                final_sy,
+                color,
+                replace,
+                source_white_mask,
+                dp,
+            );
+        }
         if let Some(started) = started {
             let elapsed = started.elapsed().as_nanos() as u64;
             AXIS_DRAW_CALLS.fetch_add(1, Ordering::Relaxed);

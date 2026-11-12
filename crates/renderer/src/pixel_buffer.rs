@@ -617,7 +617,6 @@ impl PixelBuffer {
         self.write_at(idx, r, g, b, a);
     }
 
-    /// Draw a filled axis-aligned rectangle
     /// Overwrite this buffer with `source` scaled up 2x (each pixel to a 2x2 block).
     pub fn copy_scaled_2x_from(&mut self, source: &PixelBuffer) {
         let width = self.width as usize;
@@ -633,10 +632,12 @@ impl PixelBuffer {
                 pair[..4].copy_from_slice(pixel);
                 pair[4..].copy_from_slice(pixel);
             }
-            self.pixels.copy_within(start..start + row_bytes, start + row_bytes);
+            self.pixels
+                .copy_within(start..start + row_bytes, start + row_bytes);
         }
     }
 
+    /// Draw a filled axis-aligned rectangle
     pub fn fill_rect(&mut self, x: i32, y: i32, w: i32, h: i32, color: [u8; 4]) {
         let (clip_x0, clip_y0, clip_x1, clip_y1) = self.clip_bounds();
         let x0 = x.max(clip_x0);

@@ -3,6 +3,7 @@ local tapped, done
 return function(frame)
     if done then return end
     if not tapped then
+        assert(frame < 600, 'intro never reached the splash screen')
         if G.STATE ~= G.STATES.SPLASH or frame < 20 then return end
         love.keypressed('miyoo_a', 'miyoo_a', false)
         love.keyreleased('miyoo_a', 'miyoo_a')

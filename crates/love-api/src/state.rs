@@ -273,9 +273,9 @@ impl BackgroundCache {
             || self.buffer.width != width
             || self.buffer.height != height
             || self.colours != *colours
-            || self.interval.is_some_and(|interval| {
-                self.refreshed_at.is_none_or(|at| at.elapsed() >= interval)
-            })
+            || self
+                .interval
+                .is_some_and(|interval| self.refreshed_at.is_none_or(|at| at.elapsed() >= interval))
     }
 }
 

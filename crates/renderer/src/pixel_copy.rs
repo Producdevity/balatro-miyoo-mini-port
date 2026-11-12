@@ -66,8 +66,12 @@ mod tests {
         for count in (0..=33).chain([71, 639, 640]) {
             for source_offset in 0..16 {
                 for destination_offset in 0..16 {
-                    for swap in [false, true] {
-                        for reverse in [false, true] {
+                    for (swap, reverse, keep) in [false, true].into_iter().flat_map(|swap| {
+                        [false, true]
+                            .into_iter()
+                            .flat_map(move |reverse| [255u8, 128].map(|keep| (swap, reverse, keep)))
+                    }) {
+                        {
                             let input = &source[source_offset..source_offset + count * 4];
                             let mut actual = vec![0x99; destination_offset + count * 4 + 17];
                             let mut expected = actual.clone();
@@ -75,8 +79,13 @@ mod tests {
                             for x in 0..count {
                                 let source_x = if reverse { count - 1 - x } else { x };
                                 for channel in 0..4 {
+                                    let value = input[source_x * 4 + channels[channel]];
                                     expected[destination_offset + x * 4 + channel] =
-                                        input[source_x * 4 + channels[channel]];
+                                        if channel < 3 && keep < 255 {
+                                            (value as u16 * keep as u16 >> 8) as u8
+                                        } else {
+                                            value
+                                        };
                                 }
                             }
                             copy_rgba(
@@ -84,10 +93,10 @@ mod tests {
                                 &mut actual[destination_offset..destination_offset + count * 4],
                                 swap,
                                 reverse,
-                                255,
+                                keep,
                             );
                             assert_eq!(actual, expected,
-                                "count={count} source={source_offset} destination={destination_offset} swap={swap} reverse={reverse}");
+                                "count={count} source={source_offset} destination={destination_offset} swap={swap} reverse={reverse} keep={keep}");
                         }
                     }
                 }

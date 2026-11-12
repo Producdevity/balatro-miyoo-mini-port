@@ -97,11 +97,13 @@ Small fonts use Fontdue's precomputed outlines. Fonts larger than 256 KiB use
 ab_glyph to read outlines on demand; eagerly expanding the game's Noto fonts
 exhausts the handheld's memory when opening the language picker.
 
-Only one large font file is retained at a time, and it is released after 250 ms
+Only one large font file is retained at a time. Files up to 1 MiB, such as
+the Latin NotoSans, stay resident; larger CJK files are released after 2 s
 without a glyph request. Measured advances and line metrics stay cached, and
 live text objects share rendered strings, so ordinary
 layout and redraws do not reload font files. Font sizes remain in pixels per em
-for both backends. The default Nunito font keeps its original rendering path.
+for both backends. The default m6x11plus font is read from the game archive; `BALATRO_FONT=nunito`
+substitutes the bundled Nunito Black.
 New text can require reloading an expired font from the game archive. This
 trades occasional text-loading pauses for lower resident memory.
 

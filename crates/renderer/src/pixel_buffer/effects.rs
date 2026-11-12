@@ -140,14 +140,17 @@ impl PixelBuffer {
                 let a = grid[gy0 * (gw + 1) + gx];
                 let b = grid[gy1 * (gw + 1) + gx];
                 for (c, (a, b)) in [(a.0, b.0), (a.1, b.1), (a.2, b.2)].into_iter().enumerate() {
-                    value[c] = ((a as i32) << 16)
-                        + (((b as i64 - a as i64) * wy) as i32);
+                    value[c] = ((a as i32) << 16) + (((b as i64 - a as i64) * wy) as i32);
                 }
             }
             let row_pixels = &mut self.pixels[py * row_bytes..(py + 1) * row_bytes];
             let mut px = 0;
             for gx in 0..gw {
-                let end = if gx + 1 == gw { bw } else { ((gx + 1) * bw).div_ceil(gw) };
+                let end = if gx + 1 == gw {
+                    bw
+                } else {
+                    ((gx + 1) * bw).div_ceil(gw)
+                };
                 if px >= end {
                     continue;
                 }
