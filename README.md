@@ -22,8 +22,15 @@ audio; let it finish. If interrupted, launch again to resume.
 Saves are stored in `Saves/CurrentProfile/saves/Balatro`. Back them up before
 updating.
 
-The launcher requests 1.5 GHz through Onion's clock helper and restores the
-previous clock on exit. Set `BALATRO_CPU_MHZ=off` to disable this.
+The launcher keeps the stock CPU clock. To overclock, set `BALATRO_CPU_MHZ`
+(1200-1600) in `script.sh`; it uses Onion's clock helper and restores the
+previous clock on exit.
+
+Look settings are exported near the end of `script.sh`; edit their defaults
+there. `BALATRO_SCANLINES` (0-100, default 18) darkens alternate rows,
+`BALATRO_BACKGROUND_MS` sets the background animation period (0 for static),
+`BALATRO_EDITION_CACHE=0` reshades foil, holo and polychrome every frame, and
+`BALATRO_FONT=nunito` selects the previous rounded font.
 
 ## Reporting problems
 

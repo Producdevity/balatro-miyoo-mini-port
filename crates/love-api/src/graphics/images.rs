@@ -44,6 +44,15 @@ pub(super) fn register(lua: &Lua, g: &LuaTable, state: &Arc<SharedState>) -> Lua
                     return new_image_stub(lua, 1, 1);
                 };
                 let decoded = match image::load_from_memory(&data) {
+                    Ok(image)
+                        if path.ends_with("/gamepad_ui.png")
+                            && std::env::var_os("BALATRO_PLATFORM").as_deref()
+                                == Some(std::ffi::OsStr::new("miyoo")) =>
+                    {
+                        let mut rgba = image.to_rgba8();
+                        recolor_miyoo_face_buttons(&mut rgba);
+                        rgba
+                    }
                     Ok(image) => image.to_rgba8(),
                     Err(error) => {
                         eprintln!("[WARN] Failed to decode image '{}': {}", path, error);
@@ -403,4 +412,59 @@ pub(super) fn new_image_stub(lua: &Lua, w: u32, h: u32) -> LuaResult<LuaValue> {
         })?,
     )?;
     Ok(LuaValue::Table(img))
+}
+
+/// The Miyoo's face buttons are SNES-coloured (A red, B yellow, X blue, Y green),
+/// while the game's first glyph row uses Xbox colours. Give each glyph the face
+/// palette of the glyph whose colour it should have, matching shades by brightness.
+fn recolor_miyoo_face_buttons(image: &mut image::RgbaImage) {
+    let tile = image.height() / 4;
+    if tile == 0 || image.width() < tile * 4 {
+        return;
+    }
+    let source = image.clone();
+    let is_face = |p: &image::Rgba<u8>| {
+        let [r, g, b, a] = p.0;
+        a > 0 && r.max(g).max(b) - r.min(g).min(b) > 40
+    };
+    let luma =
+        |p: &image::Rgba<u8>| p.0[0] as u32 * 299 + p.0[1] as u32 * 587 + p.0[2] as u32 * 114;
+    let palette = |column: u32| {
+        let mut colours: Vec<image::Rgba<u8>> = Vec::new();
+        for y in 0..tile {
+            for x in column * tile..(column + 1) * tile {
+                let p = *source.get_pixel(x, y);
+                if is_face(&p) && !colours.contains(&p) {
+                    colours.push(p);
+                }
+            }
+        }
+        colours.sort_by_key(|p| luma(p));
+        colours
+    };
+    // (glyph column, column whose colours it takes): A<-B red, B<-Y yellow, Y<-A green.
+    for (column, donor) in [(0, 1), (1, 3), (3, 0)] {
+        let from = palette(column);
+        let to = palette(donor);
+        if from.is_empty() || to.is_empty() {
+            continue;
+        }
+        for y in 0..tile {
+            for x in column * tile..(column + 1) * tile {
+                let p = *source.get_pixel(x, y);
+                if let Some(rank) = from.iter().position(|c| *c == p) {
+                    let target = if from.len() == 1 {
+                        to[to.len() / 2]
+                    } else {
+                        to[rank * (to.len() - 1) / (from.len() - 1)]
+                    };
+                    image.put_pixel(
+                        x,
+                        y,
+                        image::Rgba([target.0[0], target.0[1], target.0[2], p.0[3]]),
+                    );
+                }
+            }
+        }
+    }
 }

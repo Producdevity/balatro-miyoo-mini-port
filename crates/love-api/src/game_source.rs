@@ -46,7 +46,7 @@ impl GameSource {
     }
 
     pub fn read_file(&self, file_path: &str) -> anyhow::Result<Vec<u8>> {
-        if std::env::var("BALATRO_PLATFORM").as_deref() == Ok("miyoo")
+        if std::env::var("BALATRO_FONT").as_deref() == Ok("nunito")
             && file_path.replace('\\', "/") == "resources/fonts/m6x11plus.ttf"
         {
             return Ok(include_bytes!("../assets/Nunito-Black.ttf").to_vec());

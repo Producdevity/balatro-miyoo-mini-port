@@ -44,7 +44,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 set_clock() {
-    target=${BALATRO_CPU_MHZ:-1500}
+    target=${BALATRO_CPU_MHZ:-off}
     [ "$target" != off ] || return 0
     case "$target" in
         ''|*[!0-9]*) echo 'BALATRO_CPU_MHZ must be off or 1200-1600' >&2; return 1 ;;
@@ -89,6 +89,10 @@ export BALATRO_PACKED_PIXELS="${BALATRO_PACKED_PIXELS:-1}"
 export BALATRO_FRAME_PIPELINE="${BALATRO_FRAME_PIPELINE:-2}"
 export BALATRO_SHADER_WORKER="${BALATRO_SHADER_WORKER:-1}"
 export BALATRO_DIRECT_PRESENT="${BALATRO_DIRECT_PRESENT:-1}"
+export BALATRO_SCANLINES="${BALATRO_SCANLINES:-18}"
+export BALATRO_BACKGROUND_MS="${BALATRO_BACKGROUND_MS:-200}"
+export BALATRO_EDITION_CACHE="${BALATRO_EDITION_CACHE:-1}"
+export BALATRO_FONT="${BALATRO_FONT:-}"
 export BALATRO_ROTATE_180="${BALATRO_ROTATE_180:-1}"
 export BALATRO_INPUT_DEVICE="${BALATRO_INPUT_DEVICE:-/dev/input/event0}"
 export BALATRO_AUDIO="${BALATRO_AUDIO:-1}"

@@ -43,6 +43,29 @@ It refreshes the license texts included in binary packages from Cargo's locked
 ARM dependency graph. Keep upstream copyright notices when moving or editing
 derived code.
 
+### Building LuaJIT without Docker
+
+If Docker can't run ARMv7 containers, Zig can build the static LuaJIT library.
+Clang emits generic 64-bit conversion helpers that `libgcc.a` from an ARM GCC
+toolchain may not resolve in the final link order, so add
+`native/clang-rt-shim.c` to the archive. Run this from the `luajit2` source
+that `cargo fetch` places in the Cargo registry:
+
+```sh
+make BUILDMODE=static TARGET_SYS=Linux HOST_CC="zig cc -target x86-linux-musl" \
+    CC="zig cc -target arm-linux-musleabihf -mcpu=cortex_a7" \
+    TARGET_AR="zig ar rcus" TARGET_STRIP=true
+arm-linux-gnueabihf-gcc -O2 -mcpu=cortex-a7 -mfloat-abi=hard \
+    -c "$ROOT/native/clang-rt-shim.c" -o shim.o
+cp src/libluajit.a "$ROOT/target/luajit-armv7-musl/libluajit-5.1.a"
+arm-linux-gnueabihf-ar rs "$ROOT/target/luajit-armv7-musl/libluajit-5.1.a" shim.o
+cp "$(arm-linux-gnueabihf-gcc -print-libgcc-file-name)" "$ROOT/target/luajit-armv7-musl/libgcc.a"
+```
+
+The `luajit` executable itself fails to link in this setup; only the library
+is needed. `scripts/build.sh` still checks for Docker, so run its Cargo and
+audio steps directly.
+
 ## Packages
 
 `scripts/package.sh /path/to/Balatro.exe` builds a local package in

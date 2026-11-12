@@ -429,3 +429,51 @@ fn white_text_mask_fast_path_matches_generic_tinting() {
         assert_eq!(fast.pixels, generic.pixels);
     }
 }
+
+#[test]
+fn procedural_background_fills_every_pixel_smoothly() {
+    let colours = [
+        [0.2, 0.5, 0.3, 1.0],
+        [0.9, 0.8, 0.2, 1.0],
+        [0.05, 0.1, 0.4, 1.0],
+    ];
+    for (w, h) in [(640, 480), (641, 479), (320, 240)] {
+        let mut buffer = PixelBuffer::new(w, h);
+        buffer.pixels.fill(0);
+        buffer.fill_procedural_background(0, 0, w as i32, h as i32, &colours, [3.0, 1.0, 0.5, 2.0]);
+        assert!(
+            buffer.pixels.chunks_exact(4).all(|p| p[3] == 255),
+            "{w}x{h} left a pixel unfilled"
+        );
+        let row_bytes = w as usize * 4;
+        for (a, b) in buffer.pixels.iter().zip(&buffer.pixels[row_bytes..]) {
+            assert!(
+                (*a as i32 - *b as i32).abs() <= 40,
+                "{w}x{h} vertical jump {a} {b}"
+            );
+        }
+        for row in buffer.pixels.chunks_exact(row_bytes) {
+            for pair in row.windows(8).step_by(4) {
+                for c in 0..3 {
+                    assert!(
+                        (pair[c] as i32 - pair[4 + c] as i32).abs() <= 40,
+                        "{w}x{h} jumps {} {}",
+                        pair[c],
+                        pair[4 + c]
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn copy_scaled_2x_duplicates_each_pixel_into_a_block() {
+    let mut source = PixelBuffer::new(2, 1);
+    source.pixels.copy_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8]);
+    let mut target = PixelBuffer::new(4, 2);
+    target.copy_scaled_2x_from(&source);
+    let row = [1, 2, 3, 4, 1, 2, 3, 4, 5, 6, 7, 8, 5, 6, 7, 8];
+    assert_eq!(&target.pixels[..16], &row);
+    assert_eq!(&target.pixels[16..], &row);
+}

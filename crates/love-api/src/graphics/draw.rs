@@ -396,19 +396,36 @@ pub(super) fn register(
                         let draw = move |pb: &mut PixelBuffer| {
                             if cached_background {
                                 let mut cache = cache.lock();
-                                if cache.needs_refresh(pb.width, pb.height, &colours) {
-                                    if cache.buffer.width != pb.width
-                                        || cache.buffer.height != pb.height
-                                    {
-                                        cache.buffer.resize(pb.width, pb.height);
+                                // Even-sized frames keep a half-resolution swirl and
+                                // scale it up per frame: a quarter of the redraw cost.
+                                let half = pb.width % 2 == 0 && pb.height % 2 == 0;
+                                let (cw, ch) = if half {
+                                    (pb.width / 2, pb.height / 2)
+                                } else {
+                                    (pb.width, pb.height)
+                                };
+                                if cache.needs_refresh(cw, ch, &colours) {
+                                    if cache.buffer.width != cw || cache.buffer.height != ch {
+                                        cache.buffer.resize(cw, ch);
                                     }
-                                    cache.buffer.fill_procedural_background(
-                                        tx as i32, ty as i32, dst_w, dst_h, &colours, bg_params,
+                                    cache.buffer.fill_procedural_background_cells(
+                                        tx as i32,
+                                        ty as i32,
+                                        dst_w,
+                                        dst_h,
+                                        &colours,
+                                        bg_params,
+                                        if half { 4 } else { 8 },
                                     );
                                     cache.colours = colours;
                                     cache.valid = true;
+                                    cache.refreshed_at = Some(std::time::Instant::now());
                                 }
-                                pb.pixels.copy_from_slice(&cache.buffer.pixels);
+                                if half {
+                                    pb.copy_scaled_2x_from(&cache.buffer);
+                                } else {
+                                    pb.pixels.copy_from_slice(&cache.buffer.pixels);
+                                }
                             } else {
                                 pb.fill_procedural_background(
                                     tx as i32, ty as i32, dst_w, dst_h, &colours, bg_params,
@@ -432,12 +449,20 @@ pub(super) fn register(
                             color,
                             *s.default_filter_linear.lock(),
                         ) {
-                            s.card_cache.lock().get(
-                                &image,
-                                [src_x, src_y, src_w, src_h],
-                                dp.shader_effect,
-                                dp.shader_inputs.clock != 0.0,
-                            )
+                            if matches!(dp.shader_effect, 3 | 4 | 5) {
+                                s.card_cache.lock().get_shaded(
+                                    &image,
+                                    [src_x, src_y, src_w, src_h],
+                                    dp,
+                                )
+                            } else {
+                                s.card_cache.lock().get(
+                                    &image,
+                                    [src_x, src_y, src_w, src_h],
+                                    dp.shader_effect,
+                                    dp.shader_inputs.clock != 0.0,
+                                )
+                            }
                         } else {
                             None
                         };
@@ -684,7 +709,9 @@ pub(super) fn draw_region_to_buf(
             static VERIFY: LazyLock<bool> =
                 LazyLock::new(|| std::env::var("BALATRO_VERIFY_RASTER").as_deref() == Ok("1"));
             static CHECKS: AtomicU64 = AtomicU64::new(0);
-            let reference = VERIFY.then(|| {
+            // Edition cards are shaded with quantized inputs, so they cannot match
+            // a reference drawn from the exact inputs.
+            let reference = (*VERIFY && !matches!(dp.shader_effect, 3 | 4 | 5)).then(|| {
                 let mut reference = PixelBuffer::new(pb.width, pb.height);
                 reference.copy_raster_source(pb);
                 reference.draw_image_region_transformed(
@@ -755,23 +782,40 @@ pub(super) fn draw_region_to_buf(
             profiled_pixels = dst_w.saturating_mul(dst_h);
             AXIS_DRAW_PIXELS.fetch_add(profiled_pixels, Ordering::Relaxed);
         }
-        pb.draw_image_region(
-            src_pixels,
-            src_w,
-            src_h,
-            src_x,
-            src_y,
-            src_rw,
-            src_rh,
-            dst_x,
-            dst_y,
-            final_sx,
-            final_sy,
-            color,
-            replace,
-            source_white_mask,
-            dp,
-        );
+        let edition = prepared.filter(|_| {
+            matches!(dp.shader_effect, 3 | 4 | 5) && !pb.filter_linear && !pb.stencil_write_mode
+        });
+        if let (Some(prepared), Some(inv)) = (edition, composite.inverse()) {
+            prepared.draw(
+                pb,
+                [
+                    dst_x.floor() as i32,
+                    dst_y.floor() as i32,
+                    (dst_x + src_rw * final_sx).ceil() as i32,
+                    (dst_y + src_rh * final_sy).ceil() as i32,
+                ],
+                [inv.a, inv.b, inv.tx, inv.c, inv.d, inv.ty],
+                replace,
+            );
+        } else {
+            pb.draw_image_region(
+                src_pixels,
+                src_w,
+                src_h,
+                src_x,
+                src_y,
+                src_rw,
+                src_rh,
+                dst_x,
+                dst_y,
+                final_sx,
+                final_sy,
+                color,
+                replace,
+                source_white_mask,
+                dp,
+            );
+        }
         if let Some(started) = started {
             let elapsed = started.elapsed().as_nanos() as u64;
             AXIS_DRAW_CALLS.fetch_add(1, Ordering::Relaxed);

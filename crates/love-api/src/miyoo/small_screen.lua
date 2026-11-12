@@ -29,10 +29,10 @@ local HAND_W = 6.8*G.CARD_W
 local LAYOUT_DIAGNOSTICS = os.getenv('BALATRO_LAYOUT_DIAGNOSTICS') == '1'
 
 local HUD_INNER_W = ROOM_W - SAFE_MARGIN*2 - 0.9
-local HUD_BLIND_W = HUD_INNER_W*0.28
+local HUD_BLIND_W = HUD_INNER_W*0.27
 local HUD_SCORE_W = HUD_INNER_W*0.165
-local HUD_HAND_W = HUD_INNER_W*0.295
-local HUD_META_W = HUD_INNER_W*0.26
+local HUD_HAND_W = HUD_INNER_W*0.265
+local HUD_META_W = HUD_INNER_W*0.30
 
 local SCORE_SCALE = 0.92
 local SCORE_TEXT_W = HUD_SCORE_W - 0.26
@@ -40,7 +40,8 @@ local TARGET_SCALE = 0.62
 local HAND_TEXT_SCALE = 0.68
 local HAND_LEVEL_MULT = 0.72
 local HAND_NUM_SCALE = 0.96
-local HAND_NUM_BOX_W = 2.0
+local HAND_NUM_BOX_W = 1.7
+local HAND_NUM_BOX_H = 0.85
 local HAND_BOX_PAD = 0.06
 local DOLLARS_SCALE = 0.74
 local DOLLARS_W = 1.24
@@ -235,13 +236,22 @@ end
 
 local original_cardarea_draw = CardArea.draw
 function CardArea:draw(...)
+    -- Hand, Joker and consumable areas keep the desktop's translucent plates
+    -- and card counts; other plates stay hidden in this layout.
     local result = original_cardarea_draw(self, ...)
     local box = self.children.area_uibox
-    if box and not box.small_screen_plate_hidden then
-        box.small_screen_plate_hidden = true
-        if self == G.hand or self == G.jokers or self == G.consumeables then
-            box.states.visible = false
+    if box and self == G.hand and not box.small_screen_hand_padding then
+        box.small_screen_hand_padding = true
+        local plate = box.UIRoot and box.UIRoot.children and box.UIRoot.children[1]
+        if plate then
+            plate.config.minw = self.T.w + 0.3
+            plate.config.minh = self.T.h + 0.05
+            box:recalculate()
         end
+    end
+    if box and not box.small_screen_plate_hidden and
+       self ~= G.hand and self ~= G.jokers and self ~= G.consumeables then
+        box.small_screen_plate_hidden = true
         local plate = box.UIRoot and box.UIRoot.children and box.UIRoot.children[1]
         if plate and plate.config and plate.config.colour then
             plate.states.visible = false
@@ -592,15 +602,27 @@ function G.UIDEF.shop()
         {card_limit=2, type='shop', highlight_limit=1,
             card_w=1.27*G.CARD_W})
 
+    -- The desktop sign, scaled into the HUD's empty blind slot.
+    local sign_h = HUD_ROW_H - 0.3
+    local shop_sign = AnimatedSprite(0, 0, 2*sign_h, sign_h, G.ANIMATION_ATLAS['shop_sign'])
+    shop_sign:define_draw_steps({
+        {shader='dissolve', shadow_height=0.05},
+        {shader='dissolve'}
+    })
     G.SHOP_SIGN = UIBox{
-        definition={n=G.UIT.ROOT, config={align='cm', minw=0.01,
-            minh=0.01, colour=G.C.CLEAR}, nodes={}},
-        config={align='tli', offset={x=-20,y=-20}, major=G.ROOM_ATTACH}
+        definition={n=G.UIT.ROOT, config={align='cm', colour=G.C.CLEAR}, nodes={
+            {n=G.UIT.O, config={object=shop_sign}}
+        }},
+        config={align='cm', offset={x=0, y=-15}, major=G.HUD:get_UIE_by_ID('row_blind'),
+            bond='Weak'}
     }
-    G.SHOP_SIGN.states.visible = false
+    G.E_MANAGER:add_event(Event({trigger='immediate', func=function()
+        G.SHOP_SIGN.alignment.offset.y = 0
+        return true
+    end}))
 
     local function plate(width, nodes)
-        return {n=G.UIT.C, config={align='cm', padding=0.15, minw=width,
+        return {n=G.UIT.C, config={align='cm', padding=0.1, minw=width,
             r=0.15, colour=G.C.L_BLACK, emboss=0.05}, nodes=nodes}
     end
 
@@ -610,8 +632,13 @@ function G.UIDEF.shop()
         }}
     end
 
+    -- Both shelf rows share column widths so the panel's margins line up.
+    local shelf_w = math.max(7.9, G.shop_jokers.T.w + 1.4)
+    local voucher_w = math.max(3.16, G.shop_vouchers.T.w + 0.2)
+    local button_w = voucher_w - 2*0.08
+
     local controls = {n=G.UIT.C, config={align='cm', padding=0.08}, nodes={
-        {n=G.UIT.R, config={id='next_round_button', align='cm', minw=3.0,
+        {n=G.UIT.R, config={id='next_round_button', align='cm', minw=button_w,
             minh=1.45, padding=0.06, r=0.14, colour=G.C.RED,
             one_press=true, button='toggle_shop', hover=true, shadow=true}, nodes={
             {n=G.UIT.R, config={align='cm', padding=0.04,
@@ -624,7 +651,7 @@ function G.UIDEF.shop()
                 }}
             }}
         }},
-        {n=G.UIT.R, config={align='cm', minw=3.0, minh=1.5,
+        {n=G.UIT.R, config={align='cm', minw=button_w, minh=1.5,
             padding=0.06, r=0.14, colour=G.C.GREEN,
             button='reroll_shop', func='can_reroll', hover=true, shadow=true}, nodes={
             {n=G.UIT.R, config={align='cm', padding=0.04,
@@ -642,11 +669,11 @@ function G.UIDEF.shop()
         }}
     }}
 
-    local card_shelf = plate(math.max(7.9, G.shop_jokers.T.w + 1.4), {
+    local card_shelf = plate(shelf_w, {
         area_row(G.shop_jokers)
     })
 
-    local voucher = plate(nil, {
+    local voucher = plate(voucher_w, {
         area_row(G.shop_vouchers),
         {n=G.UIT.R, config={align='cm', maxw=G.shop_vouchers.T.w}, nodes={
             {n=G.UIT.T, config={text=localize{type='variable',
@@ -655,7 +682,7 @@ function G.UIDEF.shop()
         }}
     })
 
-    local boosters = plate(nil, {area_row(G.shop_booster)})
+    local boosters = plate(shelf_w, {area_row(G.shop_booster)})
 
     return {n=G.UIT.ROOT, config={align='cm', padding=0.03,
         maxh=ROOM_H-RUN_OVERLAY_Y-SAFE_MARGIN,
@@ -714,14 +741,17 @@ function create_UIBox_HUD()
     local score_row_h = score_text_h + 0.04
     local target_text_h = text_height(TARGET_SCALE)
     local target_row_h = target_text_h + 0.04
-    local dollars_box_h = text_height(DOLLARS_SCALE, numeric) + 0.08
 
     local name_box_w = HUD_HAND_W - 0.06
     local name_box_h = text_height(HAND_TEXT_SCALE)
     local num_text_w = HAND_NUM_BOX_W - 2*HAND_BOX_PAD
     local num_text_h = text_height(HAND_NUM_SCALE, numeric)
-    local num_box_h = num_text_h + 2*HAND_BOX_PAD
+    local num_box_h = math.max(num_text_h + 2*HAND_BOX_PAD, HAND_NUM_BOX_H)
     local row_h = math.max(HUD_ROW_H, name_box_h + num_box_h + 0.06 + 0.09)
+    -- Split the score box's height so its margins match on every side.
+    local score_rows_h = row_h - 0.06*3
+    score_row_h = math.max(score_row_h, score_rows_h*0.58)
+    target_row_h = math.max(target_row_h, score_rows_h - score_row_h)
 
     local score_text = FixedText(SCORE_TEXT_W, score_text_h,
         {scale=SCORE_SCALE, font=numeric, colour=G.C.WHITE})
@@ -750,7 +780,7 @@ function create_UIBox_HUD()
                 h=score_text_h, object=score_text, func='chip_UI_set'}}
         }},
         {n=G.UIT.R, config={align='cm', minw=HUD_SCORE_W-0.12, minh=target_row_h,
-            r=0.08, colour=darken(G.C.BLACK, 0.4)}, nodes={
+            r=0.08, colour=mix_colours(G.C.RED, inset, 0.18)}, nodes={
             {n=G.UIT.O, config={id='small_screen_blind_target', w=SCORE_TEXT_W,
                 h=target_text_h, object=target_text,
                 func='small_screen_blind_target'}}
@@ -791,57 +821,53 @@ function create_UIBox_HUD()
         }}
     }}
 
+    -- Desktop-style stat cell: small label above the value.
+    local function stat(key, width, extra, value)
+        local config = {align='cm', minw=width, minh=0.8, padding=0.03, r=0.08,
+            colour=inset}
+        for k, v in pairs(extra or {}) do config[k] = v end
+        return {n=G.UIT.C, config=config, nodes={
+            {n=G.UIT.R, config={align='cm'}, nodes={label(localize(key), 0.3)}},
+            {n=G.UIT.R, config={align='cm'}, nodes={value}}
+        }}
+    end
+
     local meta = {n=G.UIT.C, config={align='cm', minw=HUD_META_W, minh=row_h,
-        padding=0.07, r=0.1, colour=panel, emboss=0.05}, nodes={
-        {n=G.UIT.R, config={align='cm', minh=0.72}, nodes={
-            {n=G.UIT.C, config={align='cm', minw=1.3, minh=dollars_box_h,
+        padding=0.05, r=0.1, colour=panel, emboss=0.05}, nodes={
+        {n=G.UIT.R, config={align='cm', minh=0.8}, nodes={
+            {n=G.UIT.C, config={align='cm', minw=1.3, minh=0.8,
                 padding=0.03, r=0.08, colour=inset}, nodes={
                 dyn(G.GAME, 'dollars', G.C.MONEY, DOLLARS_SCALE, 'dollar_text_UI',
                     {prefix=localize('$'), bump=true,
                         func='small_screen_dollars'})
             }},
             gap(0.06),
-            {n=G.UIT.C, config={id='hud_hands', align='cm', minw=1.0,
-                minh=0.66, padding=0.03, r=0.08, colour=inset}, nodes={
-                label('H', 0.5, G.C.BLUE),
-                gap(0.04),
-                dyn(G.GAME.current_round, 'hands_left', G.C.BLUE, 0.76, 'hand_UI_count')
-            }},
+            stat('k_hud_hands', 1.3, {id='hud_hands'},
+                dyn(G.GAME.current_round, 'hands_left', G.C.BLUE, 0.62, 'hand_UI_count')),
             gap(0.06),
-            {n=G.UIT.C, config={align='cm', minw=1.0, minh=0.66,
-                padding=0.03, r=0.08, colour=inset}, nodes={
-                label('D', 0.5, G.C.RED),
-                gap(0.04),
-                dyn(G.GAME.current_round, 'discards_left', G.C.RED, 0.76, 'discard_UI_count')
-            }}
+            stat('k_hud_discards', 1.45, nil,
+                dyn(G.GAME.current_round, 'discards_left', G.C.RED, 0.62, 'discard_UI_count'))
         }},
-        {n=G.UIT.R, config={align='cm', minh=0.72}, nodes={
-            {n=G.UIT.C, config={id='hud_ante', align='cm', minw=1.72,
-                minh=0.66, padding=0.03, r=0.08, colour=inset}, nodes={
-                label('A', 0.5, G.C.IMPORTANT),
-                gap(0.04),
-                dyn(G.GAME.round_resets, 'ante', G.C.IMPORTANT, 0.76, 'ante_UI_count'),
-                label('/', 0.42),
+        {n=G.UIT.R, config={align='cm', minh=0.8}, nodes={
+            stat('k_ante', 1.55, {id='hud_ante'}, {n=G.UIT.R, config={align='cm'}, nodes={
+                dyn(G.GAME.round_resets, 'ante', G.C.IMPORTANT, 0.62, 'ante_UI_count'),
+                label('/', 0.36),
                 {n=G.UIT.T, config={ref_table=G.GAME, ref_value='win_ante',
-                    scale=0.5, colour=G.C.WHITE, shadow=true}}
-            }},
+                    scale=0.4, colour=G.C.WHITE, shadow=true}}
+            }}),
             gap(0.06),
-            {n=G.UIT.C, config={align='cm', minw=1.14, minh=0.66,
-                padding=0.03, r=0.08, colour=inset}, nodes={
-                label('R', 0.5, G.C.IMPORTANT),
-                gap(0.04),
-                dyn(G.GAME, 'round', G.C.IMPORTANT, 0.76, 'round_UI_count')
-            }},
+            stat('k_round', 1.25, nil,
+                dyn(G.GAME, 'round', G.C.IMPORTANT, 0.62, 'round_UI_count')),
             gap(0.06),
-            {n=G.UIT.C, config={id='run_info_button', align='cm', minw=0.48,
-                minh=0.66, padding=0.03, r=0.08, colour=G.C.RED,
+            {n=G.UIT.C, config={id='run_info_button', align='cm', minw=0.6,
+                minh=0.8, padding=0.03, r=0.08, colour=G.C.RED,
                 hover=true, button='run_info', shadow=true,
                 focus_args={button=G.F_GUIDE and 'guide' or 'back', orientation='bm'}}, nodes={
                 label('i', 0.52)
             }},
             gap(0.06),
-            {n=G.UIT.C, config={id='options_button', align='cm', minw=0.48,
-                minh=0.66, padding=0.03, r=0.08, colour=G.C.ORANGE,
+            {n=G.UIT.C, config={id='options_button', align='cm', minw=0.6,
+                minh=0.8, padding=0.03, r=0.08, colour=G.C.ORANGE,
                 hover=true, button='options', shadow=true,
                 focus_args={button='start', orientation='bm'}}, nodes={
                 label('II', 0.42)
@@ -849,12 +875,17 @@ function create_UIBox_HUD()
         }}
     }}
 
-    return {n=G.UIT.ROOT, config={align='cm', padding=0.06, minw=ROOM_W-SAFE_MARGIN*2,
-        colour=G.C.CLEAR}, nodes={
-        {n=G.UIT.R, config={id='row_round', align='cm', padding=0.06,
-            r=0.1, colour=G.C.CLEAR}, nodes={
-            blind_slot, gap(0.1), score, gap(0.1),
-            current_hand, gap(0.1), meta
+    -- A horizontal take on the desktop's sidebar: a translucent full-width band,
+    -- a MAIN-coloured rim and a dark panel holding the boxes.
+    return {n=G.UIT.ROOT, config={align='cm', padding=0.05, minw=ROOM_W,
+        colour=G.C.UI.TRANSPARENT_DARK}, nodes={
+        {n=G.UIT.R, config={align='cm', padding=0.05, r=0.1,
+            colour=G.C.DYN_UI.MAIN}, nodes={
+            {n=G.UIT.R, config={id='row_round', align='cm', padding=0.06,
+                r=0.1, colour=G.C.DYN_UI.BOSS_DARK}, nodes={
+                blind_slot, gap(0.1), score, gap(0.1),
+                current_hand, gap(0.1), meta
+            }}
         }}
     }}
 end
@@ -862,11 +893,10 @@ end
 function create_UIBox_HUD_blind()
     local box_w = HUD_BLIND_W - 0.12
     local inner_w = box_w - 0.12
-    G.GAME.blind:change_dim(0.62, 0.62)
-    local hidden_reward = {text=''}
+    G.GAME.blind:change_dim(0.75, 0.75)
     return {n=G.UIT.ROOT, config={id='HUD_blind', func='HUD_blind_visible',
-        align='cm', minw=box_w, maxw=box_w, minh=1.5,
-        padding=0.05, r=0.1,
+        align='cm', minw=box_w, maxw=box_w, minh=HUD_ROW_H - 0.12,
+        padding=0.08, r=0.1,
         colour=G.C.BLACK, emboss=0.05}, nodes={
         {n=G.UIT.R, config={align='cm', minh=text_height(BLIND_NAME_SCALE) + 0.08,
             maxw=inner_w, r=0.08,
@@ -877,6 +907,17 @@ function create_UIBox_HUD_blind()
                 string={{ref_table=G.GAME.blind, ref_value='loc_name'}},
                 colours={G.C.UI.TEXT_LIGHT}, shadow=true, rotate=true,
                 silent=true, float=true, scale=BLIND_NAME_SCALE, y_offset=-2})}}
+        }},
+        {n=G.UIT.R, config={align='cm', minh=0.5, maxw=inner_w,
+            func='HUD_blind_reward'}, nodes={
+            {n=G.UIT.T, config={text=localize('ph_blind_reward'), scale=0.45,
+                colour=G.C.WHITE}},
+            {n=G.UIT.O, config={id='dollars_to_be_earned', object=DynaText({
+                string={{ref_table=G.GAME.current_round, ref_value='dollars_to_be_earned'}},
+                colours={G.C.MONEY}, shadow=true, rotate=true, bump=true, silent=true,
+                scale=0.65})}},
+            {n=G.UIT.T, config={id='HUD_blind_count', ref_table=G.GAME.blind,
+                ref_value='chip_text', scale=0.001, colour=G.C.CLEAR, no_recalc=true}}
         }},
         {n=G.UIT.R, config={align='cm', minh=0.27, maxw=inner_w,
             colour=G.C.DYN_UI.DARK}, nodes={
@@ -891,16 +932,6 @@ function create_UIBox_HUD_blind()
             {n=G.UIT.T, config={id='HUD_blind_debuff_2',
                 ref_table=G.GAME.blind.loc_debuff_lines, ref_value=2,
                 scale=0.4, colour=G.C.UI.TEXT_LIGHT, func='HUD_blind_debuff'}}
-        }},
-        {n=G.UIT.R, config={align='cm', minh=0.001}, nodes={
-            {n=G.UIT.C, config={align='cm'}, nodes={
-                {n=G.UIT.T, config={id='HUD_blind_count', ref_table=G.GAME.blind,
-                    ref_value='chip_text', scale=0.001, colour=G.C.CLEAR,
-                    no_recalc=true}},
-                {n=G.UIT.O, config={id='dollars_to_be_earned', object=DynaText({
-                    string={{ref_table=hidden_reward, ref_value='text'}},
-                    colours={G.C.CLEAR}, silent=true, scale=0.01})}}
-            }}
         }}
     }}
 end
@@ -912,6 +943,21 @@ G.FUNCS.small_screen_blind_target = function(e)
     if e.small_screen_target_text == text then return end
     e.small_screen_target_text = text
     e.config.object:set_text(text)
+end
+
+-- Desktop flames are a square 2.5x2.5 sprite on a 2x1 box. Keep the sprite
+-- square so the fire keeps its shape, but size it from the smaller box so it
+-- stays inside the HUD band instead of running off the top of the screen.
+local original_flame_handler = G.FUNCS.flame_handler
+G.FUNCS.flame_handler = function(e)
+    original_flame_handler(e)
+    local flame, box = e.config.object, e.parent
+    if flame and flame.is and flame:is(Sprite) and box and
+       flame.small_screen_box_w ~= box.T.w then
+        flame.small_screen_box_w = box.T.w
+        flame.T.w, flame.T.h = 1.15*box.T.w, 1.15*box.T.w
+        flame.VT.w, flame.VT.h = flame.T.w, flame.T.h
+    end
 end
 
 local original_chip_UI_set = G.FUNCS.chip_UI_set
@@ -974,7 +1020,7 @@ function Game:start_run(...)
     end
     if self.HUD then
         self.HUD:set_alignment({major=G.ROOM_ATTACH, type='tmi',
-            offset={x=0, y=SAFE_MARGIN}, bond='Strong'})
+            offset={x=0, y=0}, bond='Strong'})
         self.HUD:align_to_major()
         self.HUD:recalculate()
     end
@@ -1024,10 +1070,24 @@ local function shop_pin()
     return shop_pin_x, shop_pin_y
 end
 
+-- Settled UI elements keep their cached draw positions here, so moving the
+-- shop's root leaves its panels drawn in place. Hide the whole box instead
+-- (its card areas are children, so they hide too). Keeps offset.py for the
+-- game's own restore.
+local function hide_shop()
+    if not G.shop then return end
+    G.shop.states.visible = false
+    G.shop.alignment.offset.y = ROOM_H + 5
+end
+
 local original_update_shop = Game.update_shop
 function Game:update_shop(dt)
     local result = original_update_shop(self, dt)
-    if G.shop then
+    -- offset.py marks the shop as moved away while a card is being used.
+    if G.shop and G.shop.alignment.offset.py then
+        hide_shop()
+    elseif G.shop then
+        G.shop.states.visible = true
         local x, y = shop_pin()
         pin_run_overlay(G.shop, y, x)
         if shop_needs_relayout then
@@ -1037,7 +1097,13 @@ function Game:update_shop(dt)
             pin_run_overlay(G.shop, y, x)
         end
     end
-    if G.SHOP_SIGN then G.SHOP_SIGN.states.visible = false end
+    return result
+end
+
+local original_use_card = G.FUNCS.use_card
+G.FUNCS.use_card = function(...)
+    local result = original_use_card(...)
+    if G.shop and G.shop.alignment.offset.py then hide_shop() end
     return result
 end
 
@@ -1054,6 +1120,9 @@ for _, pack in ipairs({'arcana', 'spectral', 'standard', 'buffoon', 'celestial'}
     Game[name] = function(self, dt)
         local result = original(self, dt)
         centre_on_room(G.booster_pack)
+        -- Desktop lowers the shop by ROOM.T.y+11, which is still on screen in
+        -- this shorter room; move it fully below the screen while a pack is open.
+        hide_shop()
         return result
     end
 end
@@ -1070,6 +1139,14 @@ function Game:update_selecting_hand(dt)
         buttons:hard_set_VT()
     end
     centre_on_room(G.deck_preview)
+    -- "Hand will not score" sits over the Jokers in this layout; give it a
+    -- translucent dark plate so it stays readable.
+    local warning = self.boss_warning_text
+    if warning and warning.UIRoot and not warning.small_screen_plate then
+        warning.small_screen_plate = true
+        warning.UIRoot.config.colour = {0, 0, 0, 0.7}
+        warning.UIRoot.config.r = 0.15
+    end
     return result
 end
 

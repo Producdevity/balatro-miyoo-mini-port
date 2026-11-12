@@ -7,12 +7,26 @@ impl PixelBuffer {
     /// Colours are [centre, light, dark]; parameters are [time, spin_time, spin_amount, contrast].
     pub fn fill_procedural_background(
         &mut self,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        colours: &[[f32; 4]; 3],
+        bg_params: [f32; 4],
+    ) {
+        self.fill_procedural_background_cells(x, y, w, h, colours, bg_params, 8);
+    }
+
+    /// As above, sampling the field every `cell` pixels.
+    pub fn fill_procedural_background_cells(
+        &mut self,
         _x: i32,
         _y: i32,
         _w: i32,
         _h: i32,
         colours: &[[f32; 4]; 3],
         bg_params: [f32; 4],
+        cell: usize,
     ) {
         let trig = TrigLookup::new();
         let fast_sin = |x| trig.sin(x);
@@ -47,8 +61,8 @@ impl PixelBuffer {
         let contrast_mod = 0.25 * contrast + 0.5 * spin_amount + 1.2;
 
         // Sample the field at roughly eight-pixel intervals.
-        let gw = (bw / 8).max(30).min(120);
-        let gh = (bh / 8).max(20).min(90);
+        let gw = (bw / cell).max(30).min(120);
+        let gh = (bh / cell).max(20).min(90);
         let row_bytes = bw * 4;
 
         // Compute paint value at each grid point → (r, g, b)
@@ -113,52 +127,53 @@ impl PixelBuffer {
             }
         }
 
-        // Fill pixels: bilinear interpolation from grid for smooth transitions
-        let inv_gw = gw as f32 / bw as f32;
-        let inv_gh = gh as f32 / bh as f32;
-
+        // Fill pixels: bilinear interpolation from the grid in 16.16 fixed point.
+        // Each row is interpolated vertically once, then stepped across spans,
+        // which keeps periodic redraws cheap on the Cortex-A7.
+        let mut row = vec![[0i32; 3]; gw + 1];
         for py in 0..bh {
-            let fy = py as f32 * inv_gh;
+            let fy = py as f32 * gh as f32 / bh as f32;
             let gy0 = (fy as usize).min(gh - 1);
             let gy1 = (gy0 + 1).min(gh);
-            let ty = fy - gy0 as f32; // fractional part [0..1)
-            let ity = 1.0 - ty;
-            let row_base = py * row_bytes;
-            let grid_row0 = gy0 * (gw + 1);
-            let grid_row1 = gy1 * (gw + 1);
-
-            for px in 0..bw {
-                let fx = px as f32 * inv_gw;
-                let gx0 = (fx as usize).min(gw - 1);
-                let gx1 = (gx0 + 1).min(gw);
-                let tx = fx - gx0 as f32;
-                let itx = 1.0 - tx;
-
-                // Bilinear: weighted average of 4 surrounding grid points
-                let c00 = grid[grid_row0 + gx0];
-                let c10 = grid[grid_row0 + gx1];
-                let c01 = grid[grid_row1 + gx0];
-                let c11 = grid[grid_row1 + gx1];
-
-                let w00 = itx * ity;
-                let w10 = tx * ity;
-                let w01 = itx * ty;
-                let w11 = tx * ty;
-
-                let i = row_base + px * 4;
-                self.pixels[i] = (c00.0 as f32 * w00
-                    + c10.0 as f32 * w10
-                    + c01.0 as f32 * w01
-                    + c11.0 as f32 * w11) as u8;
-                self.pixels[i + 1] = (c00.1 as f32 * w00
-                    + c10.1 as f32 * w10
-                    + c01.1 as f32 * w01
-                    + c11.1 as f32 * w11) as u8;
-                self.pixels[i + 2] = (c00.2 as f32 * w00
-                    + c10.2 as f32 * w10
-                    + c01.2 as f32 * w01
-                    + c11.2 as f32 * w11) as u8;
-                self.pixels[i + 3] = 255;
+            let wy = ((fy - gy0 as f32) * 65536.0) as i64;
+            for (gx, value) in row.iter_mut().enumerate() {
+                let a = grid[gy0 * (gw + 1) + gx];
+                let b = grid[gy1 * (gw + 1) + gx];
+                for (c, (a, b)) in [(a.0, b.0), (a.1, b.1), (a.2, b.2)].into_iter().enumerate() {
+                    value[c] = ((a as i32) << 16) + (((b as i64 - a as i64) * wy) as i32);
+                }
+            }
+            let row_pixels = &mut self.pixels[py * row_bytes..(py + 1) * row_bytes];
+            let mut px = 0;
+            for gx in 0..gw {
+                let end = if gx + 1 == gw {
+                    bw
+                } else {
+                    ((gx + 1) * bw).div_ceil(gw)
+                };
+                if px >= end {
+                    continue;
+                }
+                // Fraction of this grid cell at px, and per-pixel step, in 16.16.
+                let t = ((px * gw - gx * bw) as i64 * 65536 / bw as i64) as i64;
+                let step = 65536 * gw as i64 / bw as i64;
+                let mut v = [0i32; 3];
+                let mut d = [0i32; 3];
+                for c in 0..3 {
+                    let diff = (row[gx + 1][c] - row[gx][c]) as i64;
+                    v[c] = row[gx][c] + (diff * t >> 16) as i32;
+                    d[c] = (diff * step >> 16) as i32;
+                }
+                for pixel in row_pixels[px * 4..end * 4].chunks_exact_mut(4) {
+                    pixel[0] = (v[0] >> 16).clamp(0, 255) as u8;
+                    pixel[1] = (v[1] >> 16).clamp(0, 255) as u8;
+                    pixel[2] = (v[2] >> 16).clamp(0, 255) as u8;
+                    pixel[3] = 255;
+                    v[0] += d[0];
+                    v[1] += d[1];
+                    v[2] += d[2];
+                }
+                px = end;
             }
         }
     }

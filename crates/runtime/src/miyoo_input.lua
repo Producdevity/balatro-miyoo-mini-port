@@ -99,6 +99,9 @@ love.keyreleased = function(key, scancode)
     end
 end
 
+-- Last wall-clock time each held direction was advanced; see wall_clock_hold.
+local hold_clock = {}
+
 local function dispatch(controller, dt)
     -- Run at the controller's input phase, after lock checks and before hover
     -- updates. Navigation can advance twice without drawing an intermediate frame.
@@ -108,6 +111,16 @@ local function dispatch(controller, dt)
         local button, down = event[1], event[2]
         local direction = button == 'dpleft' or button == 'dpright' or
             button == 'dpup' or button == 'dpdown'
+        if down and G.STATES and G.STATE == G.STATES.SPLASH and
+            (button == 'a' or button == 'b' or button == 'start') then
+            -- Desktop skips the intro on Escape or a click; the splash lock
+            -- blocks the controller's own Start path.
+            events[first] = nil
+            first = first + 1
+            G:delete_run()
+            G:main_menu()
+            break
+        end
         if down and pressed and not (direction and navigation) then break end
         local expired = event[2] and event[4] and love.timer.getTime() - event[3] > 0.5
         local locks = controller.locks
@@ -128,6 +141,7 @@ local function dispatch(controller, dt)
             pressed, navigation = true, direction
         else
             held[button] = nil
+            hold_clock[button] = nil
             love.gamepadreleased(gamepad, button)
             local mapped = G.button_mapping and G.button_mapping[button] or button
             controller.released_buttons[mapped] = nil
@@ -137,7 +151,38 @@ local function dispatch(controller, dt)
     if first > last then first, last = 1, 0 end
 end
 
+-- The game's held-direction repeat (0.3 s, then 0.1 s) counts its smoothed dt,
+-- which it caps at 0.1 s. At handheld frame rates that makes repeats several
+-- times slower than desktop. Feed held directions wall-clock time instead and
+-- keep the remainder that the game's reset to zero would discard.
+local function wall_clock_hold(controller)
+    if controller.miyoo_wall_hold then return end
+    controller.miyoo_wall_hold = true
+    local original_hold = controller.button_hold_update
+    local original_release = controller.button_release_update
+    controller.button_hold_update = function(self, button, dt)
+        if not (button == 'dpleft' or button == 'dpright' or
+            button == 'dpup' or button == 'dpdown') then
+            return original_hold(self, button, dt)
+        end
+        local now = love.timer.getTime()
+        local elapsed = math.min(now - (hold_clock[button] or now - dt), 0.5)
+        hold_clock[button] = now
+        local before = self.held_button_times[button]
+        local threshold = self.repress_timer or 0.3
+        original_hold(self, button, elapsed)
+        if before and before + elapsed > threshold and self.held_button_times[button] == 0 then
+            self.held_button_times[button] = math.min(before + elapsed - threshold, 0.09)
+        end
+    end
+    controller.button_release_update = function(self, button, dt)
+        hold_clock[button] = nil
+        return original_release(self, button, dt)
+    end
+end
+
 love.update = function(dt)
     G.CONTROLLER.miyoo_dispatch = dispatch
+    wall_clock_hold(G.CONTROLLER)
     if original_update then original_update(dt) end
 end

@@ -342,4 +342,35 @@ mod tests {
         )
         .exec()
     }
+
+    #[test]
+    #[ignore = "requires user-owned game archive in BALATRO_TEST_GAME"]
+    fn held_direction_repeats_on_wall_clock_at_low_frame_rates() -> LuaResult<()> {
+        let path = std::env::var("BALATRO_TEST_GAME").expect("set BALATRO_TEST_GAME");
+        let game = love_api::state::GameSource::from_path(std::path::Path::new(&path)).unwrap();
+        let lua = Lua::new();
+        for name in ["engine/object.lua", "engine/controller.lua"] {
+            load_game_script(&lua, &game, name)?;
+        }
+        lua.load(include_str!("controller_test_fixture.lua"))
+            .exec()?;
+        install(&lua)?;
+        lua.load(
+            r#"
+            -- 5 fps: each frame takes 0.2 s, but the game's dt is capped at 0.1 s.
+            local update = love.update
+            love.update = function(dt)
+                G.TIMERS.TOTAL = G.TIMERS.TOTAL + 0.1
+                update(dt)
+            end
+            love.keypressed('miyoo_right', 'miyoo_right', false)
+            for i = 1, 10 do love.update(0.1) end
+            love.keyreleased('miyoo_right', 'miyoo_right')
+            love.update(0.1)
+            -- Desktop repeats about 15 times in 2 s; capped dt gave 4.
+            assert(navigated >= 9, 'held D-pad repeated ' .. navigated .. ' times in 2 s')
+        "#,
+        )
+        .exec()
+    }
 }

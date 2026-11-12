@@ -744,6 +744,10 @@ fn run_frame_loop<B: Backend>(
             Ok("blind-ui") => Some(include_str!("replays/blind_ui.lua")),
             Ok("jokers") => Some(include_str!("replays/jokers.lua")),
             Ok("long-run") => Some(include_str!("replays/long_run.lua")),
+            Ok("tap-select" | "tap-select-slow") => Some(include_str!("replays/tap_select.lua")),
+            Ok("splash-skip") => Some(include_str!("replays/splash_skip.lua")),
+            Ok("pack-open") => Some(include_str!("replays/pack_open.lua")),
+            Ok("boss-warning") => Some(include_str!("replays/boss_warning.lua")),
             _ => None,
         };
         script
@@ -756,7 +760,7 @@ fn run_frame_loop<B: Backend>(
     let slow_test = controls_test.is_some()
         && matches!(
             std::env::var("BALATRO_TEST_CONTROLS").as_deref(),
-            Ok("collection-slow" | "music-transitions")
+            Ok("collection-slow" | "music-transitions" | "tap-select-slow")
         );
 
     // Saves can restore graphics settings after initialization.

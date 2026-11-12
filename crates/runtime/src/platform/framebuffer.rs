@@ -764,6 +764,26 @@ fn native_present_enabled() -> bool {
     *ENABLED
 }
 
+/// Brightness kept on odd output rows for a BALATRO_SCANLINES percentage.
+#[cfg(any(target_os = "linux", test))]
+fn scanline_keep_for(percent: u32) -> u8 {
+    (255 - percent.min(100) * 255 / 100) as u8
+}
+
+/// Scanlines apply to the native 640x480 copy only, which the launcher uses.
+#[cfg(any(target_os = "linux", test))]
+fn scanline_keep() -> u8 {
+    static KEEP: std::sync::LazyLock<u8> = std::sync::LazyLock::new(|| {
+        scanline_keep_for(
+            std::env::var("BALATRO_SCANLINES")
+                .ok()
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(0),
+        )
+    });
+    *KEEP
+}
+
 #[cfg(any(target_os = "linux", test))]
 fn blit_native(
     source: &[u8],
@@ -773,6 +793,7 @@ fn blit_native(
     stride: usize,
     indices: [usize; 4],
     rotate_180: bool,
+    odd_row_keep: u8,
 ) {
     let row_bytes = width * 4;
     for y in 0..height {
@@ -780,7 +801,14 @@ fn blit_native(
         let source = &source[source_y * row_bytes..(source_y + 1) * row_bytes];
         let destination = &mut destination[y * stride..y * stride + row_bytes];
         if native_present_enabled() && matches!(indices, [0, 1, 2, 3] | [2, 1, 0, 3]) {
-            sprite_to_text::pixel_copy::copy_rgba(source, destination, indices[0] == 2, rotate_180);
+            let keep = if y % 2 == 1 { odd_row_keep } else { 255 };
+            sprite_to_text::pixel_copy::copy_rgba(
+                source,
+                destination,
+                indices[0] == 2,
+                rotate_180,
+                keep,
+            );
             continue;
         }
         if !rotate_180 && indices == [0, 1, 2, 3] {
@@ -840,6 +868,7 @@ fn blit_scaled(
                 stride,
                 indices,
                 rotate_180,
+                scanline_keep(),
             );
             // Every image pixel was overwritten. Only padding needs clearing.
             let row_bytes = source_width * 4;
@@ -903,6 +932,7 @@ fn blit_scaled(
                 stride,
                 indices,
                 rotate_180,
+                scanline_keep(),
             );
             return;
         }
@@ -1062,6 +1092,7 @@ mod tests {
                         stride,
                         indices,
                         rotated,
+                        255,
                     );
                     for y in 0..height {
                         for x in 0..width {
@@ -1115,13 +1146,36 @@ mod tests {
     }
 
     #[test]
+    fn scanlines_darken_only_odd_output_rows() {
+        assert_eq!(scanline_keep_for(0), 255);
+        assert_eq!(scanline_keep_for(18), 210);
+        assert_eq!(scanline_keep_for(100), 0);
+        assert_eq!(scanline_keep_for(250), 0);
+        let source = vec![200u8; 4 * 3 * 4];
+        for rotated in [false, true] {
+            let mut output = vec![0; 16 * 3];
+            blit_native(&source, 4, 3, &mut output, 16, [0, 1, 2, 3], rotated, 128);
+            for (y, row) in output.chunks_exact(16).enumerate() {
+                let expected = if y % 2 == 1 { 100 } else { 200 };
+                for pixel in row.chunks_exact(4) {
+                    assert_eq!(
+                        pixel,
+                        [expected, expected, expected, 200],
+                        "row {y} rotated={rotated}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn native_scaled_path_keeps_the_framebuffer_layout() {
         let source: Vec<u8> = (0..5 * 7 * 4).map(|i| (i * 13) as u8).collect();
         for rotated in [false, true] {
             let mut output = vec![0; 32 * 7];
             blit_scaled(&source, 5, 7, &mut output, 5, 7, 32, rgba(), rotated);
             let mut expected = output.clone();
-            blit_native(&source, 5, 7, &mut expected, 32, [0, 1, 2, 3], rotated);
+            blit_native(&source, 5, 7, &mut expected, 32, [0, 1, 2, 3], rotated, 255);
             assert_eq!(output, expected);
         }
     }

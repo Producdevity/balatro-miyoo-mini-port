@@ -4,13 +4,16 @@ use sprite_to_text::prepared_card::PreparedCard;
 use std::collections::VecDeque;
 use std::sync::{Arc, LazyLock, Weak};
 
-const LIMIT: usize = 512 * 1024;
+const LIMIT: usize = 2 * 1024 * 1024;
+const MAX_ENTRIES: usize = 64;
 
 struct Entry {
     source: Weak<ImageData>,
     region: [u32; 4],
     effect: u8,
     invert: bool,
+    /// Quantized shader inputs for edition effects; zero for fixed effects.
+    inputs: [u32; 3],
     card: Arc<PreparedCard>,
 }
 
@@ -23,8 +26,11 @@ pub(crate) struct CardCache {
 pub(crate) fn eligible(params: DissolveParams, color: [u8; 4], linear: bool) -> bool {
     static ENABLED: LazyLock<bool> =
         LazyLock::new(|| std::env::var("BALATRO_PREPARED_CARDS").as_deref() != Ok("0"));
+    static EDITIONS: LazyLock<bool> =
+        LazyLock::new(|| std::env::var("BALATRO_EDITION_CACHE").as_deref() != Ok("0"));
     *ENABLED
-        && matches!(params.shader_effect, 1 | 6)
+        && (matches!(params.shader_effect, 1 | 6)
+            || matches!(params.shader_effect, 3 | 4 | 5) && *EDITIONS)
         && params.dissolve <= 0.01
         && color == [255; 4]
         && !linear
@@ -50,6 +56,7 @@ impl CardCache {
                 && entry.region == region
                 && entry.effect == effect
                 && entry.invert == invert
+                && entry.inputs == [0; 3]
         }) {
             let entry = self.entries.remove(index).unwrap();
             let card = Arc::clone(&entry.card);
@@ -62,7 +69,7 @@ impl CardCache {
         }
         let texels = ((w + 1) * (h + 1)) as usize;
         let needed = texels * 4 + texels.div_ceil(8);
-        while self.bytes + needed > LIMIT || self.entries.len() >= 32 {
+        while self.bytes + needed > LIMIT || self.entries.len() >= MAX_ENTRIES {
             // Queued draws may still own a card. Do not evict it and allocate over the limit.
             let index = self
                 .entries
@@ -83,6 +90,84 @@ impl CardCache {
             region,
             effect,
             invert,
+            inputs: [0; 3],
+            card: Arc::clone(&card),
+        });
+        Some(card)
+    }
+
+    /// Foil, holo and polychrome shaded once per source region for shader
+    /// inputs quantized to a fifth of a second, then reused as sprites.
+    /// shortcut: the shimmer updates at ~5 Hz instead of every frame; set
+    /// BALATRO_EDITION_CACHE=0 for per-frame shading.
+    pub(crate) fn get_shaded(
+        &mut self,
+        source: &Arc<ImageData>,
+        region: [f32; 4],
+        mut params: DissolveParams,
+    ) -> Option<Arc<PreparedCard>> {
+        if region
+            .iter()
+            .any(|v| !v.is_finite() || *v < 0.0 || *v > 16_777_216.0 || v.fract() != 0.0)
+        {
+            return None;
+        }
+        let region = region.map(|v| v as u32);
+        let quantize = |v: f32, step: f32| (v / step).floor() * step;
+        let inputs = &mut params.shader_inputs;
+        inputs.clock = quantize(inputs.clock, 0.2);
+        inputs.seed = quantize(inputs.seed, 0.2);
+        inputs.phase = quantize(inputs.phase, 0.05);
+        let key = [
+            inputs.phase.to_bits(),
+            inputs.clock.to_bits(),
+            inputs.seed.to_bits(),
+        ];
+        let effect = params.shader_effect;
+        if let Some(index) = self.entries.iter().position(|entry| {
+            entry.source.as_ptr() == Arc::as_ptr(source)
+                && entry.region == region
+                && entry.effect == effect
+                && entry.inputs == key
+        }) {
+            let entry = self.entries.remove(index).unwrap();
+            let card = Arc::clone(&entry.card);
+            self.entries.push_back(entry);
+            return Some(card);
+        }
+        let [x, y, w, h] = region;
+        // Reject bad regions before sizing or evicting anything.
+        if w == 0
+            || h == 0
+            || w > 256
+            || h > 256
+            || x.saturating_add(w) > source.width
+            || (y as usize + h as usize) * source.width as usize * 4 > source.pixels.len()
+        {
+            return None;
+        }
+        let texels = w as usize * h as usize;
+        let needed = texels * 4 + texels.div_ceil(8);
+        while self.bytes + needed > LIMIT || self.entries.len() >= MAX_ENTRIES {
+            let index = self
+                .entries
+                .iter()
+                .position(|entry| Arc::strong_count(&entry.card) == 1)?;
+            self.bytes -= self.entries.remove(index)?.card.bytes();
+        }
+        let card = Arc::new(PreparedCard::shaded(
+            &source.pixels,
+            source.width,
+            region,
+            params,
+        )?);
+        self.bytes += card.bytes();
+        self.entries.push_back(Entry {
+            source: Arc::downgrade(source),
+            region,
+            effect,
+            invert: false,
+            inputs: key,
             card: Arc::clone(&card),
         });
         Some(card)
@@ -133,21 +218,52 @@ mod tests {
     fn pending_draws_cannot_push_the_cache_over_budget() {
         let source = image();
         let mut cache = CardCache::default();
-        let first = cache
-            .get(&source, [0.0, 0.0, 256.0, 256.0], 1, false)
-            .unwrap();
+        let mut held = Vec::new();
+        for n in 0..64 {
+            match cache.get(&source, [n as f32, 0.0, 256.0, 256.0], 1, false) {
+                Some(card) => held.push(card),
+                None => break,
+            }
+        }
+        assert!(
+            !held.is_empty() && cache.bytes <= LIMIT,
+            "held draws were evicted"
+        );
         assert!(cache
-            .get(&source, [1.0, 0.0, 256.0, 256.0], 1, false)
+            .get(&source, [100.0, 0.0, 256.0, 256.0], 1, false)
             .is_none());
-        drop(first);
+        held.clear();
         assert!(cache
-            .get(&source, [1.0, 0.0, 256.0, 256.0], 1, false)
+            .get(&source, [100.0, 0.0, 256.0, 256.0], 1, false)
             .is_some());
-        assert!(cache.bytes <= LIMIT);
-        for n in 0..100 {
+        for n in 0..200 {
             cache.get(&source, [n as f32, 0.0, 1.0, 1.0], 1, false);
         }
-        assert!(cache.entries.len() <= 32 && cache.bytes <= LIMIT);
+        assert!(cache.entries.len() <= MAX_ENTRIES && cache.bytes <= LIMIT);
+    }
+
+    #[test]
+    fn edition_shading_is_reused_within_a_time_step() {
+        let source = image();
+        let mut cache = CardCache::default();
+        let params = |clock: f32| DissolveParams {
+            shader_effect: 4,
+            shader_inputs: sprite_to_text::pixel_buffer::CardShaderInputs {
+                phase: 1.234,
+                clock,
+                seed: clock,
+            },
+            ..DissolveParams::NONE
+        };
+        let region = [0.0, 0.0, 71.0, 95.0];
+        let a = cache.get_shaded(&source, region, params(10.02)).unwrap();
+        let b = cache.get_shaded(&source, region, params(10.15)).unwrap();
+        let c = cache.get_shaded(&source, region, params(10.25)).unwrap();
+        assert!(Arc::ptr_eq(&a, &b), "same fifth of a second was reshaded");
+        assert!(
+            !Arc::ptr_eq(&a, &c),
+            "next fifth of a second reused stale shading"
+        );
     }
 
     #[test]
@@ -169,7 +285,7 @@ mod tests {
         ));
         assert!(!eligible(
             DissolveParams {
-                shader_effect: 5,
+                shader_effect: 2,
                 ..params
             },
             [255; 4],

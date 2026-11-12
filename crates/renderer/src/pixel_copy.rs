@@ -1,5 +1,6 @@
 /// Copy packed RGBA pixels, optionally swapping red/blue or reversing pixel order.
-pub fn copy_rgba(source: &[u8], destination: &mut [u8], swap_rb: bool, reverse: bool) {
+/// `keep` below 255 darkens RGB by keep/256 (scanline rows).
+pub fn copy_rgba(source: &[u8], destination: &mut [u8], swap_rb: bool, reverse: bool, keep: u8) {
     assert_eq!(source.len(), destination.len());
     assert_eq!(source.len() % 4, 0);
     if source.is_empty() {
@@ -15,6 +16,7 @@ pub fn copy_rgba(source: &[u8], destination: &mut [u8], swap_rb: bool, reverse: 
                 count: u32,
                 swap_rb: u32,
                 reverse: u32,
+                keep: u32,
             );
         }
         // Equal, disjoint slices contain complete pixels. The native loop
@@ -26,6 +28,7 @@ pub fn copy_rgba(source: &[u8], destination: &mut [u8], swap_rb: bool, reverse: 
                 (source.len() / 4) as u32,
                 u32::from(swap_rb),
                 u32::from(reverse),
+                u32::from(keep),
             );
         }
         return;
@@ -43,6 +46,11 @@ pub fn copy_rgba(source: &[u8], destination: &mut [u8], swap_rb: bool, reverse: 
         if swap_rb {
             target.swap(0, 2);
         }
+        if keep < 255 {
+            for c in &mut target[..3] {
+                *c = (*c as u16 * keep as u16 >> 8) as u8;
+            }
+        }
     }
 }
 
@@ -58,8 +66,12 @@ mod tests {
         for count in (0..=33).chain([71, 639, 640]) {
             for source_offset in 0..16 {
                 for destination_offset in 0..16 {
-                    for swap in [false, true] {
-                        for reverse in [false, true] {
+                    for (swap, reverse, keep) in [false, true].into_iter().flat_map(|swap| {
+                        [false, true]
+                            .into_iter()
+                            .flat_map(move |reverse| [255u8, 128].map(|keep| (swap, reverse, keep)))
+                    }) {
+                        {
                             let input = &source[source_offset..source_offset + count * 4];
                             let mut actual = vec![0x99; destination_offset + count * 4 + 17];
                             let mut expected = actual.clone();
@@ -67,8 +79,13 @@ mod tests {
                             for x in 0..count {
                                 let source_x = if reverse { count - 1 - x } else { x };
                                 for channel in 0..4 {
+                                    let value = input[source_x * 4 + channels[channel]];
                                     expected[destination_offset + x * 4 + channel] =
-                                        input[source_x * 4 + channels[channel]];
+                                        if channel < 3 && keep < 255 {
+                                            (value as u16 * keep as u16 >> 8) as u8
+                                        } else {
+                                            value
+                                        };
                                 }
                             }
                             copy_rgba(
@@ -76,13 +93,22 @@ mod tests {
                                 &mut actual[destination_offset..destination_offset + count * 4],
                                 swap,
                                 reverse,
+                                keep,
                             );
                             assert_eq!(actual, expected,
-                                "count={count} source={source_offset} destination={destination_offset} swap={swap} reverse={reverse}");
+                                "count={count} source={source_offset} destination={destination_offset} swap={swap} reverse={reverse} keep={keep}");
                         }
                     }
                 }
             }
         }
+    }
+
+    #[test]
+    fn keep_darkens_rgb_but_not_alpha() {
+        let source = [200, 100, 50, 255, 0, 255, 128, 7];
+        let mut actual = [0; 8];
+        copy_rgba(&source, &mut actual, false, false, 128);
+        assert_eq!(actual, [100, 50, 25, 255, 0, 127, 64, 7]);
     }
 }
